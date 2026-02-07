@@ -2,12 +2,9 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  cleanIngredientLine,
-  canonicalizeIngredientName,
-  displayIngredientName,
   foldText,
-  normalizeUnit,
-  toBaseUnit,
+  hasNutSignals,
+  normalizeIngredient,
   Dish,
 } from "@middagsvalet/shared";
 import { db } from "../src/db";
@@ -50,6 +47,10 @@ const aliasReportArg = args.get("aliasReport");
 const aliasReportFile = aliasReportArg
   ? path.resolve(process.cwd(), aliasReportArg)
   : path.resolve(dataDir, "ingredient_alias_report.json");
+const unresolvedReportArg = args.get("unresolvedReport");
+const unresolvedReportFile = unresolvedReportArg
+  ? path.resolve(process.cwd(), unresolvedReportArg)
+  : path.resolve(dataDir, "unresolved_ingredients.json");
 
 const dessertWords = ["kaka", "tårta", "glass", "dessert", "kladdkaka", "mousse", "paj", "cookie", "chokladboll", "våffla", "pannkaka", "overnight oats", "bakelse", "cheesecake"];
 const mainWords = ["gryta", "wok", "pasta", "soppa", "lasagne", "pizza", "burgare", "tacos", "sallad", "bowl", "kyckling", "lax", "färs", "middag", "ragu"];
@@ -71,6 +72,10 @@ type AliasDiag = {
 };
 
 const aliasDiagMap = new Map<string, AliasDiag>();
+const unresolvedDiagMap = new Map<
+  string,
+  { rawName: string; count: number; examples: Set<string>; topCategory: string; topUnit: string; maxConfidence: number }
+>();
 
 const trackAlias = (canonicalName: string, rawLine: string, unit: string): void => {
   const key = canonicalName.toLowerCase();
@@ -87,6 +92,33 @@ const trackAlias = (canonicalName: string, rawLine: string, unit: string): void 
     count: 1,
     rawExamples: new Set([rawLine]),
     units: new Set([unit]),
+  });
+};
+
+const trackUnresolved = (
+  rawName: string,
+  exampleLine: string,
+  category: Dish["ingredients"][number]["category"],
+  unit: string,
+  confidence: number,
+): void => {
+  const key = normalizeText(rawName);
+  if (!key) return;
+  const current = unresolvedDiagMap.get(key);
+  if (current) {
+    current.count += 1;
+    if (current.examples.size < 20) current.examples.add(exampleLine);
+    current.maxConfidence = Math.max(current.maxConfidence, confidence);
+    return;
+  }
+
+  unresolvedDiagMap.set(key, {
+    rawName,
+    count: 1,
+    examples: new Set([exampleLine]),
+    topCategory: category,
+    topUnit: unit,
+    maxConfidence: confidence,
   });
 };
 
@@ -120,28 +152,36 @@ const categorizeIngredient = (line: string): Dish["ingredients"][number]["catego
   return "Skafferi";
 };
 
-const parseIngredient = (line: string): Dish["ingredients"][number] => {
-  const cleanedLine = cleanIngredientLine(line);
-  if (!cleanedLine) {
-    return { name: "Okänd ingrediens", amount: 1, unit: "st", category: "Skafferi" };
+const shouldSkipIngredientLine = (line: string): boolean => {
+  const normalized = normalizeText(line);
+  if (!normalized) return true;
+  return /\b(till servering|servering|topping|garnering)\b/.test(normalized);
+};
+
+const parseIngredient = (line: string): Dish["ingredients"][number] | null => {
+  if (shouldSkipIngredientLine(line)) return null;
+
+  const normalized = normalizeIngredient(line);
+  if (!normalized.cleanedLine) {
+    return null;
   }
 
-  const amountMatch = cleanedLine.match(/^(\d+(?:[\.,]\d+)?)\s*(kg|g|hg|l|dl|cl|ml|msk|tsk|krm|st)?\s*(.*)$/i);
-
-  const rawAmount = amountMatch ? Number(String(amountMatch[1]).replace(",", ".")) : 1;
-  const rawUnit = normalizeUnit(amountMatch?.[2] ?? "st");
-  const rawName = amountMatch ? amountMatch[3] || cleanedLine : cleanedLine;
-
-  const canonicalName = canonicalizeIngredientName(rawName);
-  const base = toBaseUnit(canonicalName, Number.isFinite(rawAmount) ? rawAmount : 1, rawUnit);
-
-  trackAlias(displayIngredientName(canonicalName), cleanedLine, base.unit);
+  trackAlias(normalized.displayName, normalized.cleanedLine, normalized.unit);
+  if (normalized.matchMode === "fallback" || normalized.confidence < 0.78) {
+    trackUnresolved(
+      normalized.rawName,
+      normalized.cleanedLine,
+      normalized.category,
+      normalized.unit,
+      normalized.confidence,
+    );
+  }
 
   return {
-    name: displayIngredientName(canonicalName),
-    amount: Number(base.amount.toFixed(2)),
-    unit: base.unit,
-    category: categorizeIngredient(canonicalName),
+    name: normalized.displayName,
+    amount: normalized.amount,
+    unit: normalized.unit,
+    category: normalized.category ?? categorizeIngredient(normalized.canonicalName),
   };
 };
 
@@ -162,14 +202,14 @@ const inferAllergens = (ingredients: Dish["ingredients"]): string[] => {
   if (/mjol|pasta|brod|strobrod|vetemjol/.test(joined)) allergens.push("gluten");
   if (/mjolk|gradde|smor|ost|yoghurt/.test(joined)) allergens.push("laktos");
   if (/agg/.test(joined)) allergens.push("ägg");
-  if (/jordnot|notter|mandel|cashew|hasselnot|valnot|pistage/.test(joined)) allergens.push("nötter");
+  if (hasNutSignals(joined)) allergens.push("nötter");
   if (/soja/.test(joined)) allergens.push("soja");
   return allergens;
 };
 
 const toDish = (sample: KoketSample, index: number): { dish: Dish; mealType: "main" | "dessert" | "other" } => {
   const ingredientLines = (sample.ingredients ?? []).map((ing) => ing.raw ?? ing.name ?? "").filter(Boolean).slice(0, 30);
-  const ingredients = ingredientLines.map(parseIngredient);
+  const ingredients = ingredientLines.map(parseIngredient).filter(Boolean) as Dish["ingredients"];
 
   const mealType = detectMealType(sample);
   const timeMinutes = parseIsoDurationMinutes(sample.raw?.totalTime) ?? sample.timeMinutes ?? 30;
@@ -246,6 +286,17 @@ const run = () => {
       rawExamples: Array.from(entry.rawExamples).sort(),
     }));
 
+  const unresolvedReport = Array.from(unresolvedDiagMap.values())
+    .sort((a, b) => b.count - a.count)
+    .map((entry) => ({
+      rawName: entry.rawName,
+      count: entry.count,
+      topCategory: entry.topCategory,
+      topUnit: entry.topUnit,
+      maxConfidence: Number(entry.maxConfidence.toFixed(3)),
+      examples: Array.from(entry.examples).sort(),
+    }));
+
   fs.writeFileSync(
     aliasReportFile,
     JSON.stringify(
@@ -261,6 +312,21 @@ const run = () => {
     "utf8",
   );
 
+  fs.writeFileSync(
+    unresolvedReportFile,
+    JSON.stringify(
+      {
+        generatedAt: new Date().toISOString(),
+        source: path.basename(inputFile),
+        totalUnresolvedTokens: unresolvedReport.length,
+        unresolved: unresolvedReport,
+      },
+      null,
+      2,
+    ),
+    "utf8",
+  );
+
   const mains = counts.find((c) => c.mealType === "main")?.count ?? 0;
   const desserts = counts.find((c) => c.mealType === "dessert")?.count ?? 0;
   const other = counts.find((c) => c.mealType === "other")?.count ?? 0;
@@ -268,6 +334,7 @@ const run = () => {
   console.log(`Imported ${mapped.length} recipes from ${path.basename(inputFile)}.`);
   console.log(`Meal types => main: ${mains}, dessert: ${desserts}, other: ${other}`);
   console.log(`Alias report => ${aliasReportFile}`);
+  console.log(`Unresolved report => ${unresolvedReportFile}`);
 };
 
 run();

@@ -102,7 +102,16 @@ Med explicit filväg:
 npm run import:koket --workspace api -- --input=C:/path/to/koket-samples.json --replace=true
 ```
 
-Aliasdiagnostik skrivs till `api/data/ingredient_alias_report.json`.
+Normalisering vid import:
+- deterministisk parser för mängd/enhet/rånamn
+- canonical mapping via ingredienskatalog
+- fuzzy-match med confidence score
+- fallback till unresolved-queue för låg säkerhet
+- metadata-rader som `Till servering`/`Topping` filtreras bort
+
+Rapporter:
+- aliasdiagnostik: `api/data/ingredient_alias_report.json`
+- unresolved queue: `api/data/unresolved_ingredients.json`
 
 ## Framtida utbyggnad
 - Delade hushåll med realtids-synk
