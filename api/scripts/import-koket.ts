@@ -94,9 +94,10 @@ const detectMealType = (sample: KoketSample): "main" | "dessert" | "other" => {
 
 const detectProtein = (sample: KoketSample): string => {
   const text = normalizeText([sample.title, ...(sample.ingredients ?? []).map((i) => i.raw ?? i.name ?? "")].join(" "));
+  const beefPattern = /notkott|notfars|hogrev|entrecote|oxfile|rostbiff|biff|kottfars/;
   if (/kyckling/.test(text)) return "kyckling";
   if (/lax|fisk|torsk|rak|scampi/.test(text)) return "fisk";
-  if (/not|hogrev|entrecote|fars/.test(text)) return "nötkött";
+  if (beefPattern.test(text)) return "nötkött";
   if (/flask|bacon|skinka/.test(text)) return "fläsk";
   if (/tofu|linser|bonor|veg|vegetar/.test(text)) return "vegetariskt";
   return "vegetariskt";
@@ -104,7 +105,8 @@ const detectProtein = (sample: KoketSample): string => {
 
 const categorizeIngredient = (line: string): Dish["ingredients"][number]["category"] => {
   const l = normalizeText(line);
-  if (/kyckling|lax|fisk|not|fars|flask|skinka|rak|scampi/.test(l)) return "Kott/Fisk";
+  if (/jordnot|notter|mandel|cashew|hasselnot|valnot|pistage/.test(l)) return "Skafferi";
+  if (/kyckling|lax|fisk|notkott|notfars|hogrev|entrecote|oxfile|rostbiff|biff|kottfars|flask|skinka|rak|scampi/.test(l)) return "Kott/Fisk";
   if (/mjolk|ost|gradde|yoghurt|smor|creme fraiche|creme fraiche/.test(l)) return "Mejeri";
   if (/salt|peppar|chili|oregano|kanel|krydda|spiskummin|paprika/.test(l)) return "Kryddor";
   if (/tomat|lok|morot|potatis|broccoli|spenat|gurka|zucchini|vitlok|citron|basilika|koriander|avokado/.test(l)) return "Frukt&Gront";
@@ -153,7 +155,7 @@ const inferAllergens = (ingredients: Dish["ingredients"]): string[] => {
   if (/mjol|pasta|brod|strobrod|vetemjol/.test(joined)) allergens.push("gluten");
   if (/mjolk|gradde|smor|ost|yoghurt/.test(joined)) allergens.push("laktos");
   if (/agg/.test(joined)) allergens.push("ägg");
-  if (/not|mandel|cashew|jordnot/.test(joined)) allergens.push("nötter");
+  if (/jordnot|notter|mandel|cashew|hasselnot|valnot|pistage/.test(joined)) allergens.push("nötter");
   if (/soja/.test(joined)) allergens.push("soja");
   return allergens;
 };
