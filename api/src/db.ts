@@ -9,6 +9,7 @@ export interface PersistedDish {
   id: string;
   title: string;
   cuisineTags: string;
+  mealType?: string;
   proteinTag: string;
   timeMinutes: number;
   difficulty: string;

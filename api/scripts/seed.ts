@@ -1,4 +1,4 @@
-import { Dish } from "@middagsvalet/shared";
+﻿import { Dish } from "@middagsvalet/shared";
 import { db } from "../src/db";
 
 const cuisines = ["italienskt", "asiatiskt", "husman", "mexikanskt", "medelhav", "indiskt", "street"];
@@ -69,7 +69,7 @@ const buildDish = (index: number): Dish => {
     difficulty,
     kidFriendlyScore,
     ingredients,
-    instructionsShort: "Stek protein, koka bas, blanda med gronsaker och kryddor.",
+    instructionsShort: "Stek protein, koka bas, blanda med grönsaker och kryddor.",
     allergens,
     tags: [pick(moodTags), pick(moodTags.filter((tag) => tag !== moodTags[0]))],
     imageUrl: `https://picsum.photos/seed/dish-${index + 1}/640/480`,
@@ -83,10 +83,10 @@ removeAll.run();
 
 const insert = db.prepare(`
   INSERT INTO dishes (
-    id, title, cuisineTags, proteinTag, timeMinutes, difficulty, kidFriendlyScore,
+    id, title, cuisineTags, mealType, proteinTag, timeMinutes, difficulty, kidFriendlyScore,
     ingredients, instructionsShort, allergens, tags, imageUrl, createdAt
   ) VALUES (
-    @id, @title, @cuisineTags, @proteinTag, @timeMinutes, @difficulty, @kidFriendlyScore,
+    @id, @title, @cuisineTags, @mealType, @proteinTag, @timeMinutes, @difficulty, @kidFriendlyScore,
     @ingredients, @instructionsShort, @allergens, @tags, @imageUrl, @createdAt
   )
 `);
@@ -96,6 +96,7 @@ const tx = db.transaction((entries: Dish[]) => {
     insert.run({
       ...dish,
       cuisineTags: JSON.stringify(dish.cuisineTags),
+      mealType: "main",
       ingredients: JSON.stringify(dish.ingredients),
       allergens: JSON.stringify(dish.allergens),
       tags: JSON.stringify(dish.tags),

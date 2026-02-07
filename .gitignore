@@ -5,3 +5,4 @@ coverage
 *.db
 .env
 *.tsbuildinfo
+apps/ingest/

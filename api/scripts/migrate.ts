@@ -7,7 +7,16 @@ const files = fs.readdirSync(migrationsDir).filter((file) => file.endsWith(".sql
 
 for (const file of files) {
   const sql = fs.readFileSync(path.join(migrationsDir, file), "utf-8");
-  db.exec(sql);
+  try {
+    db.exec(sql);
+  } catch (error) {
+    const message = String((error as Error).message);
+    // Allow reruns in local dev for additive ALTERs that may already be applied.
+    if (message.includes("duplicate column name")) {
+      continue;
+    }
+    throw error;
+  }
 }
 
 console.log(`Applied ${files.length} migrations.`);

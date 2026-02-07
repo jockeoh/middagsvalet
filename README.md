@@ -88,6 +88,16 @@ npm test
 ```
 Innehåller enhetstest för scoring och menygenerator (allergi + variation).
 
+## Dataimport
+Importera externa receptsamples (om du har en lokal JSON-fil):
+
+`ash
+npm run import:koket --workspace api -- --input=../data/koket-samples.json --replace=true
+`
+
+Aliasdiagnostik skrivs till:
+- pi/data/ingredient_alias_report.json
+
 ## Framtida utbyggnad
 - Webbflöde för inloggning + hushållsdelning via shareCode
 - Delade hushåll med realtids-synk

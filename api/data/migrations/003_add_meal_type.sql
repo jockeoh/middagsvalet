@@ -1,0 +1,1 @@
+﻿ALTER TABLE dishes ADD COLUMN mealType TEXT NOT NULL DEFAULT 'main';
