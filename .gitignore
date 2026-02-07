@@ -6,3 +6,9 @@ coverage
 .env
 *.tsbuildinfo
 apps/ingest/
+api/data/ingredient_alias_report.json
+api/data/unresolved_ingredients.json
+api/data/ingredient_merge_candidates.json
+api/data/recipe_review_queue.json
+
+api/data/ingredient_inferred_amounts.json

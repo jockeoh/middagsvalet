@@ -32,6 +32,7 @@ export const buildShoppingList = (
   for (const dish of dishes) {
     for (const ingredient of dish.ingredients) {
       const canonicalName = canonicalizeIngredientName(ingredient.name);
+      if (canonicalName === "vatten") continue;
       const unit = normalizeUnit(ingredient.unit);
       const base = toBaseUnit(canonicalName, ingredient.amount, unit);
       const key = `${canonicalName}__${base.unit}`;

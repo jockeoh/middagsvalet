@@ -1,7 +1,9 @@
 import Database from "better-sqlite3";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const dbPath = path.resolve(process.cwd(), "data", "dinner.db");
+const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+const dbPath = path.resolve(scriptDir, "../data/dinner.db");
 
 export const db = new Database(dbPath);
 

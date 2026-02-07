@@ -64,6 +64,9 @@ Mobil-first app som hjälper hushåll att välja veckans middagar på cirka 3 mi
 - `POST /api/menu/swap`
 - `POST /api/menu/swap-options`
 - `POST /api/shopping-list`
+- `GET /api/review/pending` (auth, osäkra recept i väntkö)
+- `POST /api/review/:dishId/approve` (auth, flytta till `main`)
+- `POST /api/review/:dishId/approve-with-edits` (auth, uppdatera ingrediensrader och flytta till `main`)
 
 ## Kör lokalt
 ```bash
@@ -102,7 +105,20 @@ Med explicit filväg:
 npm run import:koket --workspace api -- --input=C:/path/to/koket-samples.json --replace=true
 ```
 
-Aliasdiagnostik skrivs till `api/data/ingredient_alias_report.json`.
+Normalisering vid import:
+- deterministisk parser för mängd/enhet/rånamn
+- canonical mapping via ingredienskatalog
+- fuzzy-match med confidence score
+- fallback till unresolved-queue för låg säkerhet
+- metadata-rader som `Till servering`/`Topping` filtreras bort
+- recept med osäkra nyckelmått (t.ex. `pasta 1 st`) flyttas till `pending_review` och visas inte i menyflödet
+
+Rapporter:
+- aliasdiagnostik: `api/data/ingredient_alias_report.json`
+- unresolved queue: `api/data/unresolved_ingredients.json`
+- merge-kandidater f\u00f6r manuell/AI-klumpning: `api/data/ingredient_merge_candidates.json`
+- recept-v\u00e4nth\u00f6g: `api/data/recipe_review_queue.json`
+- auto-infererade m\u00e4ngdjusteringar: `api/data/ingredient_inferred_amounts.json`
 
 ## Framtida utbyggnad
 - Delade hushåll med realtids-synk

@@ -1,6 +1,6 @@
 ﻿import cors from "cors";
 import express, { NextFunction, Request, Response } from "express";
-import { buildShoppingList, Dish, generateWeeklyMenu, getSwapCandidates, swapMenuDish } from "@middagsvalet/shared";
+import { buildShoppingList, Dish, generateWeeklyMenu, getSwapCandidates, normalizeUnit, swapMenuDish } from "@middagsvalet/shared";
 import { z } from "zod";
 import { db, PersistedDish } from "./db";
 import { hashPassword, randomId, randomToken, verifyPassword } from "./auth";
@@ -476,6 +476,68 @@ app.get("/api/bootstrap", (_req, res) => {
   };
 
   res.json({ dishes, stats });
+});
+
+app.get("/api/review/pending", requireAuth, (_req, res) => {
+  const rows = db
+    .prepare("SELECT * FROM dishes WHERE mealType = 'pending_review' ORDER BY createdAt DESC")
+    .all() as PersistedDish[];
+  res.json({ dishes: rows.map(parseDish) });
+});
+
+app.post("/api/review/:dishId/approve", requireAuth, (req, res) => {
+  const dishId = String(req.params.dishId);
+  const result = db
+    .prepare("UPDATE dishes SET mealType = 'main' WHERE id = ? AND mealType = 'pending_review'")
+    .run(dishId);
+
+  if (result.changes === 0) {
+    res.status(404).json({ error: "Pending recipe not found" });
+    return;
+  }
+
+  res.json({ ok: true });
+});
+
+app.post("/api/review/:dishId/approve-with-edits", requireAuth, (req, res) => {
+  const dishId = String(req.params.dishId);
+  const payload = z
+    .object({
+      edits: z.array(
+        z.object({
+          index: z.number().int().min(0),
+          amount: z.number().positive(),
+          unit: z.string().min(1).max(16),
+        }),
+      ),
+    })
+    .parse(req.body);
+
+  const row = db.prepare("SELECT ingredients FROM dishes WHERE id = ? AND mealType = 'pending_review'").get(dishId) as
+    | { ingredients: string }
+    | undefined;
+
+  if (!row) {
+    res.status(404).json({ error: "Pending recipe not found" });
+    return;
+  }
+
+  const ingredients = JSON.parse(row.ingredients) as Dish["ingredients"];
+  for (const edit of payload.edits) {
+    if (edit.index < 0 || edit.index >= ingredients.length) continue;
+    ingredients[edit.index] = {
+      ...ingredients[edit.index],
+      amount: Number(edit.amount.toFixed(2)),
+      unit: normalizeUnit(edit.unit),
+    };
+  }
+
+  db.prepare("UPDATE dishes SET ingredients = ?, mealType = 'main' WHERE id = ?").run(
+    JSON.stringify(ingredients),
+    dishId,
+  );
+
+  res.json({ ok: true });
 });
 
 app.post("/api/rate", (req, res) => {

@@ -1,10 +1,13 @@
 ﻿import { Dish, Household, Profile, SessionInfo, ShoppingList, WeeklyMenu } from "@middagsvalet/shared";
 import { useEffect, useMemo, useState } from "react";
 import {
+  approvePendingDish,
+  approvePendingDishWithEdits,
   createHousehold,
   fetchBootstrap,
   fetchHousehold,
   fetchMe,
+  fetchPendingReviewDishes,
   fetchShoppingList,
   fetchSwapOptions,
   generateMenu,
@@ -15,10 +18,11 @@ import {
   saveRating,
   updateHouseholdConfig,
   HouseholdListItem,
+  PendingReviewDish,
 } from "./api";
 import { clearState, loadState, LocalState, saveState } from "./storage";
 
-type Step = "onboarding" | "rank" | "menu" | "shopping";
+type Step = "onboarding" | "rank" | "menu" | "shopping" | "review";
 type Mode = "auth" | "household" | "app";
 type AuthMode = "login" | "register";
 
@@ -86,6 +90,10 @@ export function App() {
   const [swapQueues, setSwapQueues] = useState<Record<number, WeeklyMenu["dinners"]>>({});
   const [swappingDayIndex, setSwappingDayIndex] = useState<number | null>(null);
   const [shoppingList, setShoppingList] = useState<ShoppingList | null>(null);
+  const [pendingReviewDishes, setPendingReviewDishes] = useState<PendingReviewDish[]>([]);
+  const [reviewEdits, setReviewEdits] = useState<
+    Record<string, Record<number, { amount: string; unit: string }>>
+  >({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -436,6 +444,98 @@ export function App() {
     setStep("shopping");
   };
 
+  const handleOpenReview = async () => {
+    if (!token) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const pending = await fetchPendingReviewDishes(token);
+      setPendingReviewDishes(pending);
+      setReviewEdits({});
+      setStep("review");
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleApprovePending = async (dishId: string) => {
+    if (!token) return;
+    setLoading(true);
+    setError(null);
+    try {
+      await approvePendingDish(token, dishId);
+      const pending = await fetchPendingReviewDishes(token);
+      setPendingReviewDishes(pending);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const setReviewIngredientEdit = (
+    dishId: string,
+    ingredientIndex: number,
+    field: "amount" | "unit",
+    value: string,
+  ) => {
+    setReviewEdits((prev) => ({
+      ...prev,
+      [dishId]: {
+        ...(prev[dishId] ?? {}),
+        [ingredientIndex]: {
+          amount: prev[dishId]?.[ingredientIndex]?.amount ?? "",
+          unit: prev[dishId]?.[ingredientIndex]?.unit ?? "",
+          [field]: value,
+        },
+      },
+    }));
+  };
+
+  const handleApprovePendingWithEdits = async (dish: PendingReviewDish) => {
+    if (!token) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const draft = reviewEdits[dish.id] ?? {};
+      const edits: Array<{ index: number; amount: number; unit: string }> = [];
+
+      for (const [rawIndex, edit] of Object.entries(draft)) {
+        const index = Number(rawIndex);
+        const ingredient = dish.ingredients[index];
+        if (!ingredient) continue;
+
+        const amountSource = edit.amount.trim().length > 0 ? edit.amount : String(ingredient.amount);
+        const unit = edit.unit.trim().length > 0 ? edit.unit.trim() : ingredient.unit;
+        const amount = Number(amountSource.replace(",", "."));
+        if (!Number.isFinite(amount) || amount <= 0 || unit.length === 0) {
+          throw new Error(`Ogiltig mängd eller enhet på rad ${index + 1}`);
+        }
+
+        const amountChanged = Math.abs(amount - ingredient.amount) > 0.0001;
+        const unitChanged = unit.toLowerCase() !== ingredient.unit.trim().toLowerCase();
+        if (amountChanged || unitChanged) {
+          edits.push({ index, amount, unit });
+        }
+      }
+
+      await approvePendingDishWithEdits(token, dish.id, edits);
+      const pending = await fetchPendingReviewDishes(token);
+      setPendingReviewDishes(pending);
+      setReviewEdits((prev) => {
+        const next = { ...prev };
+        delete next[dish.id];
+        return next;
+      });
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const togglePantry = (name: string) => {
     const next = { ...pantryState, [name.toLowerCase()]: !pantryState[name.toLowerCase()] };
     setPantryState(next);
@@ -469,6 +569,7 @@ export function App() {
             <span data-active={step === "rank"}>2 Snabbranking</span>
             <span data-active={step === "menu"}>3 Meny</span>
             <span data-active={step === "shopping"}>4 Inköp</span>
+            <span data-active={step === "review"}>5 Review</span>
           </div>
         ) : null}
       </header>
@@ -549,6 +650,9 @@ export function App() {
               <button onClick={() => setMode("household")}>Byt hushåll</button>
               <button onClick={handleLogout}>Logga ut</button>
               <button onClick={() => setStep("onboarding")}>Redigera onboarding</button>
+              <button onClick={() => void handleOpenReview()} disabled={loading}>
+                Review-kö
+              </button>
             </div>
           </section>
 
@@ -767,6 +871,77 @@ export function App() {
                   ))}
                 </div>
               ))}
+              <button className="cta" onClick={() => setStep("menu")}>
+                Tillbaka till meny
+              </button>
+            </section>
+          )}
+
+          {step === "review" && (
+            <section className="panel">
+              <h2>Review-kö (osäkra recept)</h2>
+              {pendingReviewDishes.length === 0 ? (
+                <p>Inga recept väntar på granskning.</p>
+              ) : (
+                pendingReviewDishes.map((dish) => (
+                  <article key={dish.id} className="menu-item">
+                    <div>
+                      <h3>{dish.title}</h3>
+                      <p>
+                        {dish.proteinTag} | {dish.timeMinutes} min | {dish.ingredients.length} ingredienser
+                      </p>
+                      <div style={{ marginTop: "0.5rem", display: "grid", gap: "0.4rem" }}>
+                        {dish.ingredients.map((ingredient, index) => {
+                          const edited = reviewEdits[dish.id]?.[index];
+                          return (
+                            <div
+                              key={`${dish.id}-${ingredient.name}-${index}`}
+                              style={{
+                                display: "grid",
+                                gridTemplateColumns: "1fr 80px 70px",
+                                gap: "0.4rem",
+                                alignItems: "center",
+                              }}
+                            >
+                              <span>{ingredient.name}</span>
+                              <input
+                                inputMode="decimal"
+                                value={edited?.amount ?? String(ingredient.amount)}
+                                onChange={(e) =>
+                                  setReviewIngredientEdit(dish.id, index, "amount", e.target.value)
+                                }
+                                aria-label={`Mängd för ${ingredient.name}`}
+                              />
+                              <input
+                                value={edited?.unit ?? ingredient.unit}
+                                onChange={(e) =>
+                                  setReviewIngredientEdit(dish.id, index, "unit", e.target.value)
+                                }
+                                aria-label={`Enhet för ${ingredient.name}`}
+                              />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    <div className="menu-actions">
+                      {dish.sourceUrl ? (
+                        <a className="menu-link" href={dish.sourceUrl} target="_blank" rel="noreferrer">
+                          Recept
+                        </a>
+                      ) : (
+                        <button disabled>Recept saknas</button>
+                      )}
+                      <button onClick={() => void handleApprovePending(dish.id)} disabled={loading}>
+                        Godkänn
+                      </button>
+                      <button onClick={() => void handleApprovePendingWithEdits(dish)} disabled={loading}>
+                        Godkänn med ändring
+                      </button>
+                    </div>
+                  </article>
+                ))
+              )}
               <button className="cta" onClick={() => setStep("menu")}>
                 Tillbaka till meny
               </button>
