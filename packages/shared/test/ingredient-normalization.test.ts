@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+﻿import { describe, expect, it } from "vitest";
 import { normalizeIngredient } from "../src/ingredient-normalization";
 
 describe("ingredient normalization", () => {
@@ -43,6 +43,8 @@ describe("ingredient normalization", () => {
     const dillPlockad = normalizeIngredient("Dill plockad - 50 ml");
     const buljongA = normalizeIngredient("Gronsaksbuljong tarning - 1 st");
     const buljongB = normalizeIngredient("Gronsaksbuljongtarning - 1 st");
+    const onionA = normalizeIngredient("Gul lök - 1 st");
+    const onionB = normalizeIngredient("Gul lok stor - 1 st");
 
     expect(citronBase.displayName).toBe("Citron");
     expect(citronLite.displayName).toBe("Citron");
@@ -51,5 +53,7 @@ describe("ingredient normalization", () => {
     expect(dillPlockad.displayName).toBe("Dill");
     expect(buljongA.displayName).toBe("Grönsaksbuljong");
     expect(buljongB.displayName).toBe("Grönsaksbuljong");
+    expect(onionA.displayName).toBe("Gul lök");
+    expect(onionB.displayName).toBe("Gul lök");
   });
 });

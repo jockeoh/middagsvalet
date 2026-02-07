@@ -105,6 +105,8 @@ const NOISE_WORDS = new Set([
   "smaksatt",
   "lite",
   "litet",
+  "stor",
+  "stora",
   "tarning",
   "tarningar",
   "klyfta",
