@@ -698,7 +698,7 @@ export function App() {
                       onClick={() => void handleSmartSwap(day.dayIndex)}
                       disabled={loading || day.locked || swappingDayIndex === day.dayIndex}
                     >
-                      {swappingDayIndex === day.dayIndex ? "Byter..." : "Smart byt rätt"}
+                      Byt rätt
                     </button>
                   </div>
                 </article>

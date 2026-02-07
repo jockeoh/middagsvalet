@@ -214,6 +214,10 @@ button:hover {
   gap: 0.45rem;
 }
 
+.menu-actions button {
+  min-width: 7.5rem;
+}
+
 .shopping-block {
   border-top: 1px solid #8da9c4;
   margin-top: 0.7rem;
