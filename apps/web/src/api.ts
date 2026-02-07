@@ -22,6 +22,8 @@ export interface HouseholdWithShareCode extends Household {
   shareCode: string;
 }
 
+export interface PendingReviewDish extends Dish {}
+
 const parseJson = async <T>(response: Response): Promise<T> => {
   if (!response.ok) {
     const body = (await response.json().catch(() => ({}))) as { error?: string };
@@ -219,4 +221,17 @@ export const fetchShoppingList = async (payload: {
     body: JSON.stringify(payload),
   });
   return parseJson(response);
+};
+
+export const fetchPendingReviewDishes = async (token: string): Promise<PendingReviewDish[]> => {
+  const response = await authedFetch(token, "/review/pending");
+  const data = await parseJson<{ dishes: PendingReviewDish[] }>(response);
+  return data.dishes;
+};
+
+export const approvePendingDish = async (token: string, dishId: string): Promise<void> => {
+  const response = await authedFetch(token, `/review/${dishId}/approve`, {
+    method: "POST",
+  });
+  await parseJson<{ ok: boolean }>(response);
 };

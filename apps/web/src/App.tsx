@@ -1,10 +1,12 @@
 ﻿import { Dish, Household, Profile, SessionInfo, ShoppingList, WeeklyMenu } from "@middagsvalet/shared";
 import { useEffect, useMemo, useState } from "react";
 import {
+  approvePendingDish,
   createHousehold,
   fetchBootstrap,
   fetchHousehold,
   fetchMe,
+  fetchPendingReviewDishes,
   fetchShoppingList,
   fetchSwapOptions,
   generateMenu,
@@ -15,10 +17,11 @@ import {
   saveRating,
   updateHouseholdConfig,
   HouseholdListItem,
+  PendingReviewDish,
 } from "./api";
 import { clearState, loadState, LocalState, saveState } from "./storage";
 
-type Step = "onboarding" | "rank" | "menu" | "shopping";
+type Step = "onboarding" | "rank" | "menu" | "shopping" | "review";
 type Mode = "auth" | "household" | "app";
 type AuthMode = "login" | "register";
 
@@ -86,6 +89,7 @@ export function App() {
   const [swapQueues, setSwapQueues] = useState<Record<number, WeeklyMenu["dinners"]>>({});
   const [swappingDayIndex, setSwappingDayIndex] = useState<number | null>(null);
   const [shoppingList, setShoppingList] = useState<ShoppingList | null>(null);
+  const [pendingReviewDishes, setPendingReviewDishes] = useState<PendingReviewDish[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -436,6 +440,36 @@ export function App() {
     setStep("shopping");
   };
 
+  const handleOpenReview = async () => {
+    if (!token) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const pending = await fetchPendingReviewDishes(token);
+      setPendingReviewDishes(pending);
+      setStep("review");
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleApprovePending = async (dishId: string) => {
+    if (!token) return;
+    setLoading(true);
+    setError(null);
+    try {
+      await approvePendingDish(token, dishId);
+      const pending = await fetchPendingReviewDishes(token);
+      setPendingReviewDishes(pending);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const togglePantry = (name: string) => {
     const next = { ...pantryState, [name.toLowerCase()]: !pantryState[name.toLowerCase()] };
     setPantryState(next);
@@ -469,6 +503,7 @@ export function App() {
             <span data-active={step === "rank"}>2 Snabbranking</span>
             <span data-active={step === "menu"}>3 Meny</span>
             <span data-active={step === "shopping"}>4 Inköp</span>
+            <span data-active={step === "review"}>5 Review</span>
           </div>
         ) : null}
       </header>
@@ -549,6 +584,9 @@ export function App() {
               <button onClick={() => setMode("household")}>Byt hushåll</button>
               <button onClick={handleLogout}>Logga ut</button>
               <button onClick={() => setStep("onboarding")}>Redigera onboarding</button>
+              <button onClick={() => void handleOpenReview()} disabled={loading}>
+                Review-kö
+              </button>
             </div>
           </section>
 
@@ -767,6 +805,41 @@ export function App() {
                   ))}
                 </div>
               ))}
+              <button className="cta" onClick={() => setStep("menu")}>
+                Tillbaka till meny
+              </button>
+            </section>
+          )}
+
+          {step === "review" && (
+            <section className="panel">
+              <h2>Review-kö (osäkra recept)</h2>
+              {pendingReviewDishes.length === 0 ? (
+                <p>Inga recept väntar på granskning.</p>
+              ) : (
+                pendingReviewDishes.map((dish) => (
+                  <article key={dish.id} className="menu-item">
+                    <div>
+                      <h3>{dish.title}</h3>
+                      <p>
+                        {dish.proteinTag} | {dish.timeMinutes} min | {dish.ingredients.length} ingredienser
+                      </p>
+                    </div>
+                    <div className="menu-actions">
+                      {dish.sourceUrl ? (
+                        <a className="menu-link" href={dish.sourceUrl} target="_blank" rel="noreferrer">
+                          Recept
+                        </a>
+                      ) : (
+                        <button disabled>Recept saknas</button>
+                      )}
+                      <button onClick={() => void handleApprovePending(dish.id)} disabled={loading}>
+                        Godkänn
+                      </button>
+                    </div>
+                  </article>
+                ))
+              )}
               <button className="cta" onClick={() => setStep("menu")}>
                 Tillbaka till meny
               </button>

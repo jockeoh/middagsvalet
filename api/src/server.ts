@@ -478,6 +478,27 @@ app.get("/api/bootstrap", (_req, res) => {
   res.json({ dishes, stats });
 });
 
+app.get("/api/review/pending", requireAuth, (_req, res) => {
+  const rows = db
+    .prepare("SELECT * FROM dishes WHERE mealType = 'pending_review' ORDER BY createdAt DESC")
+    .all() as PersistedDish[];
+  res.json({ dishes: rows.map(parseDish) });
+});
+
+app.post("/api/review/:dishId/approve", requireAuth, (req, res) => {
+  const dishId = String(req.params.dishId);
+  const result = db
+    .prepare("UPDATE dishes SET mealType = 'main' WHERE id = ? AND mealType = 'pending_review'")
+    .run(dishId);
+
+  if (result.changes === 0) {
+    res.status(404).json({ error: "Pending recipe not found" });
+    return;
+  }
+
+  res.json({ ok: true });
+});
+
 app.post("/api/rate", (req, res) => {
   const payload = ratingSchema.parse(req.body);
   db.prepare(

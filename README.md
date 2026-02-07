@@ -64,6 +64,8 @@ Mobil-first app som hjälper hushåll att välja veckans middagar på cirka 3 mi
 - `POST /api/menu/swap`
 - `POST /api/menu/swap-options`
 - `POST /api/shopping-list`
+- `GET /api/review/pending` (auth, osäkra recept i väntkö)
+- `POST /api/review/:dishId/approve` (auth, flytta till `main`)
 
 ## Kör lokalt
 ```bash

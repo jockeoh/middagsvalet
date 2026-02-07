@@ -28,7 +28,6 @@ export const buildShoppingList = (
   pantryState: Record<string, boolean> = {},
 ): ShoppingList => {
   const bucket = new Map<string, { name: string; amount: number; unit: string; category: (typeof categories)[number] }>();
-  const canonicalUnitStats = new Map<string, { hasConcreteUnit: boolean }>();
 
   for (const dish of dishes) {
     for (const ingredient of dish.ingredients) {
@@ -36,9 +35,6 @@ export const buildShoppingList = (
       if (canonicalName === "vatten") continue;
       const unit = normalizeUnit(ingredient.unit);
       const base = toBaseUnit(canonicalName, ingredient.amount, unit);
-      const stats = canonicalUnitStats.get(canonicalName) ?? { hasConcreteUnit: false };
-      if (base.unit !== "st") stats.hasConcreteUnit = true;
-      canonicalUnitStats.set(canonicalName, stats);
       const key = `${canonicalName}__${base.unit}`;
       const current = bucket.get(key);
       if (current) {
@@ -63,11 +59,6 @@ export const buildShoppingList = (
   };
 
   for (const item of bucket.values()) {
-    const canonicalName = canonicalizeIngredientName(item.name);
-    const stats = canonicalUnitStats.get(canonicalName);
-    // Drop placeholder count rows when a concrete unit exists for the same ingredient this week.
-    if (item.unit === "st" && item.amount <= 1 && stats?.hasConcreteUnit) continue;
-
     const formatted = prettifyAmountAndUnit(item.amount, item.unit);
     itemsByCategory[item.category].push({
       ...item,
