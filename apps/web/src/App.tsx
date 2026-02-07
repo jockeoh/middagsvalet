@@ -357,7 +357,7 @@ export function App() {
     if (queue.length > 0) {
       const [next, ...rest] = queue;
       applySwapCandidate(dayIndex, next);
-      setSwapQueues((prev) => ({ ...prev, [dayIndex]: rest }));
+      setSwapQueues(rest.length > 0 ? { [dayIndex]: rest } : {});
       return;
     }
 
@@ -374,7 +374,7 @@ export function App() {
 
       const [next, ...rest] = result.candidates;
       applySwapCandidate(dayIndex, next);
-      setSwapQueues((prev) => ({ ...prev, [dayIndex]: rest }));
+      setSwapQueues(rest.length > 0 ? { [dayIndex]: rest } : {});
     } finally {
       setSwappingDayIndex(null);
     }
