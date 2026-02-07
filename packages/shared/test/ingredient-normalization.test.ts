@@ -34,4 +34,22 @@ describe("ingredient normalization", () => {
     expect(b.displayName).toBe("Citron");
     expect(c.displayName).toBe("Citron");
   });
+
+  it("collapses descriptor and spacing variants to a shared canonical item", () => {
+    const citronBase = normalizeIngredient("Citron - 2 st");
+    const citronLite = normalizeIngredient("Citron lite - 1 st");
+    const citronBroken = normalizeIngredient("Citron- ortris - 1 st");
+    const dill = normalizeIngredient("Dill - 50 ml");
+    const dillPlockad = normalizeIngredient("Dill plockad - 50 ml");
+    const buljongA = normalizeIngredient("Gronsaksbuljong tarning - 1 st");
+    const buljongB = normalizeIngredient("Gronsaksbuljongtarning - 1 st");
+
+    expect(citronBase.displayName).toBe("Citron");
+    expect(citronLite.displayName).toBe("Citron");
+    expect(citronBroken.displayName).toBe("Citron");
+    expect(dill.displayName).toBe("Dill");
+    expect(dillPlockad.displayName).toBe("Dill");
+    expect(buljongA.displayName).toBe("Grönsaksbuljong");
+    expect(buljongB.displayName).toBe("Grönsaksbuljong");
+  });
 });

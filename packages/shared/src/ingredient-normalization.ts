@@ -66,6 +66,8 @@ const NOISE_WORDS = new Set([
   "stekning",
   "steka",
   "stek",
+  "plockad",
+  "plockade",
   "fritering",
   "fritera",
   "finhackad",
@@ -101,6 +103,10 @@ const NOISE_WORDS = new Set([
   "ekologiska",
   "smak",
   "smaksatt",
+  "lite",
+  "litet",
+  "tarning",
+  "tarningar",
   "klyfta",
   "klyftor",
   "kvist",
@@ -150,6 +156,7 @@ const CATALOG: CatalogEntry[] = [
   { canonicalName: "farsk koriander", displayName: "F\u00e4rsk koriander", category: "Frukt&Gront", aliases: ["koriander", "farsk koriander", "korianderkvistar"] },
   { canonicalName: "mynta", displayName: "Mynta", category: "Frukt&Gront", aliases: ["mynta", "farsk mynta"] },
   { canonicalName: "basilika", displayName: "Basilika", category: "Frukt&Gront", aliases: ["basilika", "farsk basilika"] },
+  { canonicalName: "dill", displayName: "Dill", category: "Frukt&Gront", aliases: ["dill", "farsk dill"] },
   { canonicalName: "olivolja", displayName: "Olivolja", category: "Skafferi", aliases: ["olivolja"] },
   { canonicalName: "rapsolja", displayName: "Rapsolja", category: "Skafferi", aliases: ["rapsolja"] },
   {
@@ -177,6 +184,12 @@ const CATALOG: CatalogEntry[] = [
   { canonicalName: "havregryn", displayName: "Havregryn", category: "Skafferi", aliases: ["havregryn"] },
   { canonicalName: "hoisinsas", displayName: "Hoisins\u00e5s", category: "Skafferi", aliases: ["hoisinsas"] },
   { canonicalName: "sojasas", displayName: "Sojas\u00e5s", category: "Skafferi", aliases: ["sojasas", "soja"] },
+  {
+    canonicalName: "gronsaksbuljong",
+    displayName: "Gr\u00f6nsaksbuljong",
+    category: "Skafferi",
+    aliases: ["gronsaksbuljong", "gronsaksbuljongtarning", "gronsaksbuljong tarning"],
+  },
   { canonicalName: "japansk soja", displayName: "Japansk soja", category: "Skafferi", aliases: ["japansk soja"] },
   { canonicalName: "sesamolja", displayName: "Sesamolja", category: "Skafferi", aliases: ["sesamolja"] },
   { canonicalName: "chili", displayName: "Chili", category: "Kryddor", aliases: ["chili", "chiliflakes"] },
@@ -261,6 +274,7 @@ export const cleanIngredientLine = (raw: string): string => {
 
 const normalizeNameText = (rawName: string): string => {
   let name = foldText(rawName);
+  name = name.replace(/-/g, " ");
   name = name.replace(/\(.*?\)/g, " ");
   name = name.replace(/,/g, " ");
   for (const [pattern, replacement] of TYPO_REPLACEMENTS) {
@@ -268,6 +282,8 @@ const normalizeNameText = (rawName: string): string => {
   }
   const tokens = squeezeSpaces(name)
     .split(" ")
+    .filter(Boolean)
+    .map((token) => token.replace(/^[-./]+|[-./]+$/g, ""))
     .filter(Boolean)
     .filter((token) => !/^\d+$/.test(token))
     .filter((token) => !NOISE_WORDS.has(token));
@@ -347,6 +363,16 @@ const fuzzyFind = (normalizedName: string): { entry: CatalogEntry; confidence: n
   return best;
 };
 
+const maybeCollapseToKnownHeadAlias = (normalizedName: string): string => {
+  const parts = normalizedName.split(" ").filter(Boolean);
+  if (parts.length < 2) return normalizedName;
+  const head = parts[0];
+  if (!ALIAS_TO_ENTRY.has(head)) return normalizedName;
+  const tail = parts.slice(1).join(" ");
+  const tailKnown = ALIAS_TO_ENTRY.has(tail) || Boolean(fuzzyFind(tail));
+  return tailKnown ? normalizedName : head;
+};
+
 const inferCategoryFallback = (normalizedName: string): IngredientCategory => {
   for (const hint of CATEGORY_HINTS) {
     if (hint.pattern.test(normalizedName)) return hint.category;
@@ -361,7 +387,7 @@ export const normalizeUnit = (unit: string): string => {
 };
 
 export const canonicalizeIngredientName = (rawName: string): string => {
-  const normalizedName = normalizeNameText(rawName);
+  const normalizedName = maybeCollapseToKnownHeadAlias(normalizeNameText(rawName));
   const exact = ALIAS_TO_ENTRY.get(normalizedName);
   if (exact) return exact.canonicalName;
   const fuzzy = fuzzyFind(normalizedName);
@@ -416,7 +442,7 @@ export const normalizeIngredient = (rawLine: string): IngredientNormalization =>
   }
 
   const parsed = parseAmountAndUnit(cleanedLine);
-  const normalizedName = normalizeNameText(parsed.namePart);
+  const normalizedName = maybeCollapseToKnownHeadAlias(normalizeNameText(parsed.namePart));
   const exact = ALIAS_TO_ENTRY.get(normalizedName);
   const fuzzy = exact ? null : fuzzyFind(normalizedName);
   const canonicalName = exact?.canonicalName ?? fuzzy?.entry.canonicalName ?? (normalizedName || "okand ingrediens");
