@@ -31,7 +31,7 @@ describe("shopping list", () => {
     expect(produceNames.includes("Gul lök")).toBe(true);
   });
 
-  it("keeps placeholder count rows together with concrete units for review visibility", () => {
+  it("suppresses placeholder count rows when measurable units exist for same ingredient", () => {
     const dishes: Dish[] = [
       {
         id: "d2",
@@ -57,9 +57,9 @@ describe("shopping list", () => {
     const pantryItems = list.itemsByCategory.Skafferi;
     const spiceItems = list.itemsByCategory.Kryddor;
 
-    expect(pantryItems.some((i) => i.name === "Pasta" && i.unit === "st")).toBe(true);
+    expect(pantryItems.some((i) => i.name === "Pasta" && i.unit === "st")).toBe(false);
     expect(pantryItems.some((i) => i.name === "Pasta" && i.unit === "g")).toBe(true);
-    expect(spiceItems.some((i) => i.name === "Chili" && i.unit === "st")).toBe(true);
+    expect(spiceItems.some((i) => i.name === "Chili" && i.unit === "st")).toBe(false);
     expect(spiceItems.some((i) => i.name === "Chili" && i.unit === "ml")).toBe(true);
   });
 });

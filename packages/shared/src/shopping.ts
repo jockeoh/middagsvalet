@@ -27,7 +27,10 @@ export const buildShoppingList = (
   dishes: Dish[],
   pantryState: Record<string, boolean> = {},
 ): ShoppingList => {
-  const bucket = new Map<string, { name: string; amount: number; unit: string; category: (typeof categories)[number] }>();
+  const bucket = new Map<
+    string,
+    { canonicalName: string; name: string; amount: number; unit: string; category: (typeof categories)[number] }
+  >();
 
   for (const dish of dishes) {
     for (const ingredient of dish.ingredients) {
@@ -41,12 +44,24 @@ export const buildShoppingList = (
         current.amount += base.amount;
       } else {
         bucket.set(key, {
+          canonicalName,
           name: displayIngredientName(canonicalName),
           amount: base.amount,
           unit: base.unit,
           category: ingredient.category,
         });
       }
+    }
+  }
+
+  const measurableUnitsByIngredient = new Map<string, Set<string>>();
+  for (const item of bucket.values()) {
+    if (item.unit === "st") continue;
+    const units = measurableUnitsByIngredient.get(item.canonicalName);
+    if (units) {
+      units.add(item.unit);
+    } else {
+      measurableUnitsByIngredient.set(item.canonicalName, new Set([item.unit]));
     }
   }
 
@@ -59,11 +74,14 @@ export const buildShoppingList = (
   };
 
   for (const item of bucket.values()) {
+    // If the same ingredient already exists with measurable units, suppress count placeholders.
+    if (item.unit === "st" && measurableUnitsByIngredient.has(item.canonicalName)) continue;
     const formatted = prettifyAmountAndUnit(item.amount, item.unit);
     itemsByCategory[item.category].push({
-      ...item,
+      name: item.name,
       amount: formatted.amount,
       unit: formatted.unit,
+      category: item.category,
       inPantry: Boolean(pantryState[item.name.toLowerCase()]),
     });
   }

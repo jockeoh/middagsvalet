@@ -364,6 +364,28 @@ const findMeasurementRiskReasons = (ingredients: Dish["ingredients"]): string[] 
   return Array.from(new Set(reasons));
 };
 
+const findMixedUnitRiskReasons = (ingredients: Dish["ingredients"]): string[] => {
+  const unitsByCanonical = new Map<string, Set<string>>();
+  for (const ingredient of ingredients) {
+    const canonical = canonicalizeIngredientName(ingredient.name);
+    const units = unitsByCanonical.get(canonical);
+    if (units) {
+      units.add(ingredient.unit);
+    } else {
+      unitsByCanonical.set(canonical, new Set([ingredient.unit]));
+    }
+  }
+
+  const reasons: string[] = [];
+  for (const [canonical, units] of unitsByCanonical.entries()) {
+    if (!units.has("st")) continue;
+    const measurableUnits = Array.from(units).filter((unit) => unit !== "st");
+    if (measurableUnits.length === 0) continue;
+    reasons.push(`${canonical}: blandade enheter (st + ${measurableUnits.join(", ")})`);
+  }
+  return reasons;
+};
+
 const toDish = (
   sample: KoketSample,
   index: number,
@@ -379,6 +401,7 @@ const toDish = (
   const reviewReasons = [
     ...resolved.unresolvedReasons,
     ...findMeasurementRiskReasons(ingredients),
+    ...findMixedUnitRiskReasons(ingredients),
   ];
   const resolvedMealType = mealType === "main" && reviewReasons.length > 0 ? "pending_review" : mealType;
 
