@@ -108,11 +108,13 @@ Normalisering vid import:
 - fuzzy-match med confidence score
 - fallback till unresolved-queue för låg säkerhet
 - metadata-rader som `Till servering`/`Topping` filtreras bort
+- recept med osäkra nyckelmått (t.ex. `pasta 1 st`) flyttas till `pending_review` och visas inte i menyflödet
 
 Rapporter:
 - aliasdiagnostik: `api/data/ingredient_alias_report.json`
 - unresolved queue: `api/data/unresolved_ingredients.json`
 - merge-kandidater f\u00f6r manuell/AI-klumpning: `api/data/ingredient_merge_candidates.json`
+- recept-v\u00e4nth\u00f6g: `api/data/recipe_review_queue.json`
 
 ## Framtida utbyggnad
 - Delade hushåll med realtids-synk

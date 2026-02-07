@@ -55,6 +55,10 @@ const mergeCandidateReportArg = args.get("mergeCandidateReport");
 const mergeCandidateReportFile = mergeCandidateReportArg
   ? path.resolve(process.cwd(), mergeCandidateReportArg)
   : path.resolve(dataDir, "ingredient_merge_candidates.json");
+const reviewQueueReportArg = args.get("reviewQueueReport");
+const reviewQueueReportFile = reviewQueueReportArg
+  ? path.resolve(process.cwd(), reviewQueueReportArg)
+  : path.resolve(dataDir, "recipe_review_queue.json");
 
 const dessertWords = ["kaka", "tårta", "glass", "dessert", "kladdkaka", "mousse", "paj", "cookie", "chokladboll", "våffla", "pannkaka", "overnight oats", "bakelse", "cheesecake"];
 const mainWords = ["gryta", "wok", "pasta", "soppa", "lasagne", "pizza", "burgare", "tacos", "sallad", "bowl", "kyckling", "lax", "färs", "middag", "ragu"];
@@ -84,6 +88,7 @@ const mergeCandidateMap = new Map<
   string,
   { mergeKey: string; count: number; variants: Map<string, number>; examples: Set<string> }
 >();
+const recipeReviewQueue: Array<{ id: string; title: string; reasons: string[] }> = [];
 
 const trackAlias = (canonicalName: string, rawLine: string, unit: string): void => {
   const key = canonicalName.toLowerCase();
@@ -265,15 +270,51 @@ const inferAllergens = (ingredients: Dish["ingredients"]): string[] => {
   return allergens;
 };
 
-const toDish = (sample: KoketSample, index: number): { dish: Dish; mealType: "main" | "dessert" | "other" } => {
+const stapleNeedsWeightPatterns = [
+  /^pasta$/,
+  /^ris$/,
+  /^nudlar$/,
+  /^gnocchi$/,
+  /^bulgur$/,
+  /^quinoa$/,
+  /^couscous$/,
+];
+
+const findMeasurementRiskReasons = (ingredients: Dish["ingredients"]): string[] => {
+  const reasons: string[] = [];
+  for (const ing of ingredients) {
+    const key = normalizeText(ing.name);
+    const isStaple = stapleNeedsWeightPatterns.some((pattern) => pattern.test(key));
+    if (!isStaple) continue;
+    if (ing.unit === "st") {
+      reasons.push(`${ing.name}: osäkert mått (${ing.amount} st)`);
+    }
+  }
+  return Array.from(new Set(reasons));
+};
+
+const toDish = (
+  sample: KoketSample,
+  index: number,
+): { dish: Dish; mealType: "main" | "dessert" | "other" | "pending_review" } => {
   const ingredientLines = (sample.ingredients ?? []).map((ing) => ing.raw ?? ing.name ?? "").filter(Boolean).slice(0, 30);
   const ingredients = ingredientLines.map(parseIngredient).filter(Boolean) as Dish["ingredients"];
 
   const mealType = detectMealType(sample);
   const timeMinutes = parseIsoDurationMinutes(sample.raw?.totalTime) ?? sample.timeMinutes ?? 30;
+  const reviewReasons = findMeasurementRiskReasons(ingredients);
+  const resolvedMealType = mealType === "main" && reviewReasons.length > 0 ? "pending_review" : mealType;
+
+  if (resolvedMealType === "pending_review") {
+    recipeReviewQueue.push({
+      id: `koket-${index + 1}`,
+      title: sample.title,
+      reasons: reviewReasons,
+    });
+  }
 
   return {
-    mealType,
+    mealType: resolvedMealType,
     dish: {
       id: `koket-${index + 1}`,
       title: sample.title,
@@ -412,15 +453,32 @@ const run = () => {
     "utf8",
   );
 
+  fs.writeFileSync(
+    reviewQueueReportFile,
+    JSON.stringify(
+      {
+        generatedAt: new Date().toISOString(),
+        source: path.basename(inputFile),
+        totalPendingRecipes: recipeReviewQueue.length,
+        recipes: recipeReviewQueue,
+      },
+      null,
+      2,
+    ),
+    "utf8",
+  );
+
   const mains = counts.find((c) => c.mealType === "main")?.count ?? 0;
   const desserts = counts.find((c) => c.mealType === "dessert")?.count ?? 0;
   const other = counts.find((c) => c.mealType === "other")?.count ?? 0;
+  const pendingReview = counts.find((c) => c.mealType === "pending_review")?.count ?? 0;
 
   console.log(`Imported ${mapped.length} recipes from ${path.basename(inputFile)}.`);
-  console.log(`Meal types => main: ${mains}, dessert: ${desserts}, other: ${other}`);
+  console.log(`Meal types => main: ${mains}, dessert: ${desserts}, other: ${other}, pending_review: ${pendingReview}`);
   console.log(`Alias report => ${aliasReportFile}`);
   console.log(`Unresolved report => ${unresolvedReportFile}`);
   console.log(`Merge candidate report => ${mergeCandidateReportFile}`);
+  console.log(`Review queue report => ${reviewQueueReportFile}`);
 };
 
 run();
