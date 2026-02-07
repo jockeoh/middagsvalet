@@ -1,6 +1,6 @@
 ﻿# Middagsvalet MVP
 
-Mobil-first app som hjälper hushåll att sätta veckans middagar på cirka 3 minuter.
+Mobil-first app som hjälper hushåll att välja veckans middagar på cirka 3 minuter.
 
 ## Product Brief
 - Problem: Beslutsstress kring vardagsmiddag, särskilt med barn och olika preferenser.
@@ -8,7 +8,7 @@ Mobil-first app som hjälper hushåll att sätta veckans middagar på cirka 3 mi
 - Primärt flöde:
   1. Onboarding (<90 sek): hushåll, profiler, preferenschips.
   2. Snabbranking: Like/Dislike/Skip i card stack.
-  3. Veckomeny: generera, låsa rätter, byta direkt.
+  3. Veckomeny: generera och byt rätt direkt.
   4. Inköpslista: summerad, kategoriserad, markera "har hemma".
 - Sticky UX: sparar lokalt utan konto, visar favoriter/historik/undvik.
 
@@ -23,7 +23,7 @@ Mobil-first app som hjälper hushåll att sätta veckans middagar på cirka 3 mi
 - `Household`: hushåll med profiler + preferenser
 - `HouseholdMembership`: relation användare ↔ hushåll (`owner`/`member`)
 - `Profile`: `id`, `name`, `type(adult|child)`, `pickyLevel`, `weight`
-- `Dish`: `id`, `title`, `cuisineTags[]`, `proteinTag`, `timeMinutes`, `difficulty`, `kidFriendlyScore`, `ingredients[]`, `instructionsShort`, `allergens[]`, `tags[]`, `imageUrl`
+- `Dish`: `id`, `title`, `sourceUrl?`, `cuisineTags[]`, `proteinTag`, `timeMinutes`, `difficulty`, `kidFriendlyScore`, `ingredients[]`, `instructionsShort`, `allergens[]`, `tags[]`, `imageUrl`
 - `RatingEvent`: like/dislike/skip per profil + hushåll
 - `WeeklyMenu`: lista av `MenuDay` med score per profil och total
 - `ShoppingList`: summerade ingredienser per kategori
@@ -42,7 +42,7 @@ Mobil-first app som hjälper hushåll att sätta veckans middagar på cirka 3 mi
 - Ingen allergen-matchning mot hushållets undviklista
 - Ingen upprepning av samma rätt under veckan
 - Huvudprotein får inte upprepas 3 dagar i rad
-- "Lås" och "Byt rätt" stöds
+- I menyvyn finns `Byt rätt` (instant) och `Recept`-länk när `sourceUrl` finns
 
 ## Seeddata
 - `api/scripts/seed.ts` genererar 300 rätter till SQLite.
@@ -62,6 +62,7 @@ Mobil-first app som hjälper hushåll att sätta veckans middagar på cirka 3 mi
 - `GET /api/history/:householdId`
 - `POST /api/menu/generate`
 - `POST /api/menu/swap`
+- `POST /api/menu/swap-options`
 - `POST /api/shopping-list`
 
 ## Kör lokalt
@@ -86,20 +87,24 @@ Använd returnerad `token` som `Authorization: Bearer <token>`.
 ```bash
 npm test
 ```
-Innehåller enhetstest för scoring och menygenerator (allergi + variation).
+Innehåller enhetstest för scoring, menygenerering och smart byte.
 
-## Dataimport
-Importera externa receptsamples (om du har en lokal JSON-fil):
+## Dataimport (Köket-samples)
+Förväntad default-fil är `api/data/koket-samples.json`.
 
-`ash
-npm run import:koket --workspace api -- --input=../data/koket-samples.json --replace=true
-`
+```bash
+npm run import:koket --workspace api
+```
 
-Aliasdiagnostik skrivs till:
-- pi/data/ingredient_alias_report.json
+Med explicit filväg:
+
+```bash
+npm run import:koket --workspace api -- --input=C:/path/to/koket-samples.json --replace=true
+```
+
+Aliasdiagnostik skrivs till `api/data/ingredient_alias_report.json`.
 
 ## Framtida utbyggnad
-- Webbflöde för inloggning + hushållsdelning via shareCode
 - Delade hushåll med realtids-synk
 - Export av inköpslista till externa korgar (ICA/Willys) via adapterlager
 - Optional LLM-modul för substitutionsförslag och kort rätt-beskrivning baserat på seeddata
