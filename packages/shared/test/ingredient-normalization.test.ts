@@ -24,4 +24,14 @@ describe("ingredient normalization", () => {
     expect(b.unit).toBe("ml");
     expect(b.amount).toBe(2000);
   });
+
+  it("maps citrus variants with peel/juice descriptions to same base item", () => {
+    const a = normalizeIngredient("Citron");
+    const b = normalizeIngredient("Citron finrivet skal");
+    const c = normalizeIngredient("Citroner pressad saft och rivet skal");
+
+    expect(a.displayName).toBe("Citron");
+    expect(b.displayName).toBe("Citron");
+    expect(c.displayName).toBe("Citron");
+  });
 });

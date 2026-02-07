@@ -51,6 +51,10 @@ const unresolvedReportArg = args.get("unresolvedReport");
 const unresolvedReportFile = unresolvedReportArg
   ? path.resolve(process.cwd(), unresolvedReportArg)
   : path.resolve(dataDir, "unresolved_ingredients.json");
+const mergeCandidateReportArg = args.get("mergeCandidateReport");
+const mergeCandidateReportFile = mergeCandidateReportArg
+  ? path.resolve(process.cwd(), mergeCandidateReportArg)
+  : path.resolve(dataDir, "ingredient_merge_candidates.json");
 
 const dessertWords = ["kaka", "tårta", "glass", "dessert", "kladdkaka", "mousse", "paj", "cookie", "chokladboll", "våffla", "pannkaka", "overnight oats", "bakelse", "cheesecake"];
 const mainWords = ["gryta", "wok", "pasta", "soppa", "lasagne", "pizza", "burgare", "tacos", "sallad", "bowl", "kyckling", "lax", "färs", "middag", "ragu"];
@@ -75,6 +79,10 @@ const aliasDiagMap = new Map<string, AliasDiag>();
 const unresolvedDiagMap = new Map<
   string,
   { rawName: string; count: number; examples: Set<string>; topCategory: string; topUnit: string; maxConfidence: number }
+>();
+const mergeCandidateMap = new Map<
+  string,
+  { mergeKey: string; count: number; variants: Map<string, number>; examples: Set<string> }
 >();
 
 const trackAlias = (canonicalName: string, rawLine: string, unit: string): void => {
@@ -119,6 +127,55 @@ const trackUnresolved = (
     topCategory: category,
     topUnit: unit,
     maxConfidence: confidence,
+  });
+};
+
+const mergeKeyStopWords = new Set([
+  "och",
+  "med",
+  "till",
+  "for",
+  "att",
+  "finrivet",
+  "rivet",
+  "riven",
+  "rivna",
+  "skal",
+  "saft",
+  "pressad",
+  "pressat",
+  "pressade",
+  "zest",
+]);
+
+const toMergeKey = (value: string): string => {
+  const normalized = normalizeText(value);
+  const tokens = normalized
+    .split(/\s+/)
+    .filter(Boolean)
+    .filter((token) => !mergeKeyStopWords.has(token))
+    .map((token) => (token.endsWith("er") && token.length > 4 ? token.slice(0, -2) : token))
+    .map((token) => (token.endsWith("or") && token.length > 4 ? token.slice(0, -2) : token))
+    .map((token) => (token.endsWith("ar") && token.length > 4 ? token.slice(0, -2) : token));
+  return tokens.join(" ").trim();
+};
+
+const trackMergeCandidate = (rawName: string, normalizedName: string, line: string): void => {
+  const key = toMergeKey(rawName);
+  if (!key || key.length < 3) return;
+  const current = mergeCandidateMap.get(key);
+  if (current) {
+    current.count += 1;
+    current.variants.set(normalizedName, (current.variants.get(normalizedName) ?? 0) + 1);
+    if (current.examples.size < 25) current.examples.add(line);
+    return;
+  }
+
+  mergeCandidateMap.set(key, {
+    mergeKey: key,
+    count: 1,
+    variants: new Map([[normalizedName, 1]]),
+    examples: new Set([line]),
   });
 };
 
@@ -167,6 +224,7 @@ const parseIngredient = (line: string): Dish["ingredients"][number] | null => {
   }
 
   trackAlias(normalized.displayName, normalized.cleanedLine, normalized.unit);
+  trackMergeCandidate(normalized.rawName, normalized.displayName, normalized.cleanedLine);
   if (normalized.matchMode === "fallback" || normalized.confidence < 0.78) {
     trackUnresolved(
       normalized.rawName,
@@ -297,6 +355,18 @@ const run = () => {
       examples: Array.from(entry.examples).sort(),
     }));
 
+  const mergeCandidateReport = Array.from(mergeCandidateMap.values())
+    .map((entry) => ({
+      mergeKey: entry.mergeKey,
+      count: entry.count,
+      variants: Array.from(entry.variants.entries())
+        .sort((a, b) => b[1] - a[1])
+        .map(([name, cnt]) => ({ name, count: cnt })),
+      examples: Array.from(entry.examples).sort(),
+    }))
+    .filter((entry) => entry.variants.length > 1)
+    .sort((a, b) => b.count - a.count);
+
   fs.writeFileSync(
     aliasReportFile,
     JSON.stringify(
@@ -327,6 +397,21 @@ const run = () => {
     "utf8",
   );
 
+  fs.writeFileSync(
+    mergeCandidateReportFile,
+    JSON.stringify(
+      {
+        generatedAt: new Date().toISOString(),
+        source: path.basename(inputFile),
+        totalMergeCandidateGroups: mergeCandidateReport.length,
+        groups: mergeCandidateReport,
+      },
+      null,
+      2,
+    ),
+    "utf8",
+  );
+
   const mains = counts.find((c) => c.mealType === "main")?.count ?? 0;
   const desserts = counts.find((c) => c.mealType === "dessert")?.count ?? 0;
   const other = counts.find((c) => c.mealType === "other")?.count ?? 0;
@@ -335,6 +420,7 @@ const run = () => {
   console.log(`Meal types => main: ${mains}, dessert: ${desserts}, other: ${other}`);
   console.log(`Alias report => ${aliasReportFile}`);
   console.log(`Unresolved report => ${unresolvedReportFile}`);
+  console.log(`Merge candidate report => ${mergeCandidateReportFile}`);
 };
 
 run();

@@ -112,6 +112,7 @@ Normalisering vid import:
 Rapporter:
 - aliasdiagnostik: `api/data/ingredient_alias_report.json`
 - unresolved queue: `api/data/unresolved_ingredients.json`
+- merge-kandidater f\u00f6r manuell/AI-klumpning: `api/data/ingredient_merge_candidates.json`
 
 ## Framtida utbyggnad
 - Delade hushåll med realtids-synk
