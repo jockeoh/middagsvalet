@@ -1,0 +1,17 @@
+{
+  "name": "middagsvalet-monorepo",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "api"
+  ],
+  "scripts": {
+    "dev:web": "npm run dev --workspace apps/web",
+    "dev:api": "npm run dev --workspace api",
+    "build": "npm run build --workspace packages/shared && npm run build --workspace api && npm run build --workspace apps/web",
+    "test": "npm run test --workspace packages/shared",
+    "seed": "npm run seed --workspace api"
+  }
+}
