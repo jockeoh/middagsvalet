@@ -2,6 +2,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  canonicalizeIngredientName,
   foldText,
   hasNutSignals,
   normalizeIngredient,
@@ -89,6 +90,14 @@ const mergeCandidateMap = new Map<
   { mergeKey: string; count: number; variants: Map<string, number>; examples: Set<string> }
 >();
 const recipeReviewQueue: Array<{ id: string; title: string; reasons: string[] }> = [];
+const inferredAmountAdjustments: Array<{
+  recipeId: string;
+  recipeTitle: string;
+  ingredient: string;
+  from: { amount: number; unit: string };
+  to: { amount: number; unit: string };
+  basis: string;
+}> = [];
 
 const trackAlias = (canonicalName: string, rawLine: string, unit: string): void => {
   const key = canonicalName.toLowerCase();
@@ -280,10 +289,72 @@ const stapleNeedsWeightPatterns = [
   /^couscous$/,
 ];
 
+const proteinCanonicalNames = new Set([
+  "kyckling",
+  "lax",
+  "torsk",
+  "rakor",
+  "notkott",
+  "notfars",
+  "flaskkott",
+  "tofu",
+  "linser",
+  "bonor",
+]);
+
+const roundToNearest = (value: number, step: number): number => Math.round(value / step) * step;
+
+const inferStapleWeightGrams = (ingredients: Dish["ingredients"]): { grams: number; basis: string } | null => {
+  const proteinGrams = ingredients
+    .filter((ing) => proteinCanonicalNames.has(canonicalizeIngredientName(ing.name)))
+    .reduce((sum, ing) => {
+      if (ing.unit !== "g") return sum;
+      return sum + ing.amount;
+    }, 0);
+
+  if (proteinGrams < 150) return null;
+  const grams = Math.max(200, Math.min(700, roundToNearest(proteinGrams * 0.8, 50)));
+  return { grams, basis: `protein_grams:${proteinGrams}` };
+};
+
+const resolveStaplePlaceholders = (
+  recipeId: string,
+  recipeTitle: string,
+  ingredients: Dish["ingredients"],
+): { ingredients: Dish["ingredients"]; unresolvedReasons: string[] } => {
+  const inferred = inferStapleWeightGrams(ingredients);
+  const next = ingredients.map((ingredient) => ({ ...ingredient }));
+  const unresolvedReasons: string[] = [];
+
+  for (const ingredient of next) {
+    const canonical = canonicalizeIngredientName(ingredient.name);
+    const isStaple = stapleNeedsWeightPatterns.some((pattern) => pattern.test(canonical));
+    if (!isStaple || ingredient.unit !== "st") continue;
+
+    if (inferred) {
+      inferredAmountAdjustments.push({
+        recipeId,
+        recipeTitle,
+        ingredient: ingredient.name,
+        from: { amount: ingredient.amount, unit: ingredient.unit },
+        to: { amount: inferred.grams, unit: "g" },
+        basis: inferred.basis,
+      });
+      ingredient.amount = inferred.grams;
+      ingredient.unit = "g";
+      continue;
+    }
+
+    unresolvedReasons.push(`${ingredient.name}: osäkert mått (${ingredient.amount} st)`);
+  }
+
+  return { ingredients: next, unresolvedReasons };
+};
+
 const findMeasurementRiskReasons = (ingredients: Dish["ingredients"]): string[] => {
   const reasons: string[] = [];
   for (const ing of ingredients) {
-    const key = normalizeText(ing.name);
+    const key = canonicalizeIngredientName(ing.name);
     const isStaple = stapleNeedsWeightPatterns.some((pattern) => pattern.test(key));
     if (!isStaple) continue;
     if (ing.unit === "st") {
@@ -298,16 +369,22 @@ const toDish = (
   index: number,
 ): { dish: Dish; mealType: "main" | "dessert" | "other" | "pending_review" } => {
   const ingredientLines = (sample.ingredients ?? []).map((ing) => ing.raw ?? ing.name ?? "").filter(Boolean).slice(0, 30);
-  const ingredients = ingredientLines.map(parseIngredient).filter(Boolean) as Dish["ingredients"];
+  const baseIngredients = ingredientLines.map(parseIngredient).filter(Boolean) as Dish["ingredients"];
 
   const mealType = detectMealType(sample);
   const timeMinutes = parseIsoDurationMinutes(sample.raw?.totalTime) ?? sample.timeMinutes ?? 30;
-  const reviewReasons = findMeasurementRiskReasons(ingredients);
+  const recipeId = `koket-${index + 1}`;
+  const resolved = resolveStaplePlaceholders(recipeId, sample.title, baseIngredients);
+  const ingredients = resolved.ingredients;
+  const reviewReasons = [
+    ...resolved.unresolvedReasons,
+    ...findMeasurementRiskReasons(ingredients),
+  ];
   const resolvedMealType = mealType === "main" && reviewReasons.length > 0 ? "pending_review" : mealType;
 
   if (resolvedMealType === "pending_review") {
     recipeReviewQueue.push({
-      id: `koket-${index + 1}`,
+      id: recipeId,
       title: sample.title,
       reasons: reviewReasons,
     });
@@ -316,7 +393,7 @@ const toDish = (
   return {
     mealType: resolvedMealType,
     dish: {
-      id: `koket-${index + 1}`,
+      id: recipeId,
       title: sample.title,
       sourceUrl: sample.sourceUrl,
       cuisineTags: sample.raw?.recipeCuisine ? [String(sample.raw.recipeCuisine).toLowerCase()] : [],
@@ -407,6 +484,7 @@ const run = () => {
     }))
     .filter((entry) => entry.variants.length > 1)
     .sort((a, b) => b.count - a.count);
+  const inferredAmountReportFile = path.resolve(dataDir, "ingredient_inferred_amounts.json");
 
   fs.writeFileSync(
     aliasReportFile,
@@ -468,6 +546,21 @@ const run = () => {
     "utf8",
   );
 
+  fs.writeFileSync(
+    inferredAmountReportFile,
+    JSON.stringify(
+      {
+        generatedAt: new Date().toISOString(),
+        source: path.basename(inputFile),
+        totalInferredAdjustments: inferredAmountAdjustments.length,
+        adjustments: inferredAmountAdjustments,
+      },
+      null,
+      2,
+    ),
+    "utf8",
+  );
+
   const mains = counts.find((c) => c.mealType === "main")?.count ?? 0;
   const desserts = counts.find((c) => c.mealType === "dessert")?.count ?? 0;
   const other = counts.find((c) => c.mealType === "other")?.count ?? 0;
@@ -479,6 +572,7 @@ const run = () => {
   console.log(`Unresolved report => ${unresolvedReportFile}`);
   console.log(`Merge candidate report => ${mergeCandidateReportFile}`);
   console.log(`Review queue report => ${reviewQueueReportFile}`);
+  console.log(`Inferred amounts report => ${inferredAmountReportFile}`);
 };
 
 run();

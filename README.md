@@ -117,6 +117,7 @@ Rapporter:
 - unresolved queue: `api/data/unresolved_ingredients.json`
 - merge-kandidater f\u00f6r manuell/AI-klumpning: `api/data/ingredient_merge_candidates.json`
 - recept-v\u00e4nth\u00f6g: `api/data/recipe_review_queue.json`
+- auto-infererade m\u00e4ngdjusteringar: `api/data/ingredient_inferred_amounts.json`
 
 ## Framtida utbyggnad
 - Delade hushåll med realtids-synk
