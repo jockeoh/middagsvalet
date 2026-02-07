@@ -59,9 +59,11 @@ const UNIT_ALIASES: Record<string, string> = {
 
 const NOISE_WORDS = new Set([
   "att",
+  "i",
   "till",
   "servering",
   "stekning",
+  "steka",
   "stek",
   "fritering",
   "fritera",
@@ -90,6 +92,10 @@ const NOISE_WORDS = new Set([
   "fp",
   "pkt",
   "paket",
+  "msk",
+  "tsk",
+  "krm",
+  "ev",
   "ekologisk",
   "ekologiska",
   "smak",
@@ -135,6 +141,12 @@ const CATALOG: CatalogEntry[] = [
   { canonicalName: "basilika", displayName: "Basilika", category: "Frukt&Gront", aliases: ["basilika", "farsk basilika"] },
   { canonicalName: "olivolja", displayName: "Olivolja", category: "Skafferi", aliases: ["olivolja"] },
   { canonicalName: "rapsolja", displayName: "Rapsolja", category: "Skafferi", aliases: ["rapsolja"] },
+  {
+    canonicalName: "olja",
+    displayName: "Olja",
+    category: "Skafferi",
+    aliases: ["olja", "olivolja", "rapsolja", "neutral olja", "neutral rapsolja", "matolja", "extra jungfruolivolja", "jungfruolivolja"],
+  },
   { canonicalName: "smor", displayName: "Sm\u00f6r", category: "Mejeri", aliases: ["smor"] },
   { canonicalName: "mjolk", displayName: "Mj\u00f6lk", category: "Mejeri", aliases: ["mjolk"] },
   { canonicalName: "gradde", displayName: "Gr\u00e4dde", category: "Mejeri", aliases: ["gradde", "vispgradde", "matlagningsgradde"] },
@@ -354,16 +366,25 @@ export const displayIngredientName = (canonicalName: string): string => {
 };
 
 export const toBaseUnit = (_canonicalName: string, amount: number, unit: string): { amount: number; unit: string } => {
+  const canonicalName = _canonicalName;
   if (unit === "l") return { amount: amount * 1000, unit: "ml" };
   if (unit === "dl") return { amount: amount * 100, unit: "ml" };
   if (unit === "cl") return { amount: amount * 10, unit: "ml" };
   if (unit === "ml") return { amount, unit: "ml" };
   if (unit === "kg") return { amount: amount * 1000, unit: "g" };
   if (unit === "hg") return { amount: amount * 100, unit: "g" };
-  if (unit === "g") return { amount, unit: "g" };
+  if (unit === "g") {
+    if (/(olja|frityrolja|sesamolja|kokosolja|tryffelolja)/.test(canonicalName)) {
+      return { amount, unit: "ml" };
+    }
+    return { amount, unit: "g" };
+  }
   if (unit === "msk") return { amount: amount * 15, unit: "ml" };
   if (unit === "tsk") return { amount: amount * 5, unit: "ml" };
   if (unit === "krm") return { amount, unit: "ml" };
+  if (unit === "st" && /(olja|frityrolja|sesamolja|kokosolja|tryffelolja)/.test(canonicalName)) {
+    return { amount: amount * 15, unit: "ml" };
+  }
   return { amount, unit: unit || "st" };
 };
 
