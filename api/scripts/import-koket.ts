@@ -1,5 +1,6 @@
 ﻿import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   cleanIngredientLine,
   canonicalizeIngredientName,
@@ -37,12 +38,18 @@ const args = new Map(
   }),
 );
 
-const inputFile = path.resolve(process.cwd(), args.get("input") ?? "../data/koket-samples.json");
+const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+const dataDir = path.resolve(scriptDir, "../data");
+
+const inputArg = args.get("input");
+const inputFile = inputArg
+  ? path.resolve(process.cwd(), inputArg)
+  : path.resolve(dataDir, "koket-samples.json");
 const replace = (args.get("replace") ?? "true") === "true";
-const aliasReportFile = path.resolve(
-  process.cwd(),
-  args.get("aliasReport") ?? "../data/ingredient_alias_report.json",
-);
+const aliasReportArg = args.get("aliasReport");
+const aliasReportFile = aliasReportArg
+  ? path.resolve(process.cwd(), aliasReportArg)
+  : path.resolve(dataDir, "ingredient_alias_report.json");
 
 const dessertWords = ["kaka", "tårta", "glass", "dessert", "kladdkaka", "mousse", "paj", "cookie", "chokladboll", "våffla", "pannkaka", "overnight oats", "bakelse", "cheesecake"];
 const mainWords = ["gryta", "wok", "pasta", "soppa", "lasagne", "pizza", "burgare", "tacos", "sallad", "bowl", "kyckling", "lax", "färs", "middag", "ragu"];
@@ -263,3 +270,5 @@ const run = () => {
 };
 
 run();
+
+
