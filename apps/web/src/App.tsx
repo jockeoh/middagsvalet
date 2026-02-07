@@ -350,14 +350,59 @@ export function App() {
     });
   };
 
+  const wouldCreateTripleProtein = (
+    currentMenu: WeeklyMenu,
+    dayIndex: number,
+    candidateProtein: string,
+  ): boolean => {
+    const proteinsByDay = new Map<number, string>();
+    for (const day of currentMenu.dinners) {
+      proteinsByDay.set(day.dayIndex, day.dayIndex === dayIndex ? candidateProtein : day.dish.proteinTag);
+    }
+
+    const maxDay = Math.max(...Array.from(proteinsByDay.keys()));
+    for (let i = 0; i <= maxDay - 2; i += 1) {
+      const a = proteinsByDay.get(i);
+      const b = proteinsByDay.get(i + 1);
+      const c = proteinsByDay.get(i + 2);
+      if (a && b && c && a === b && b === c) return true;
+    }
+    return false;
+  };
+
+  const isValidSwapCandidate = (
+    currentMenu: WeeklyMenu,
+    dayIndex: number,
+    candidate: WeeklyMenu["dinners"][number],
+  ): boolean => {
+    const duplicate = currentMenu.dinners.some(
+      (day) => day.dayIndex !== dayIndex && day.dish.id === candidate.dish.id,
+    );
+    if (duplicate) return false;
+    return !wouldCreateTripleProtein(currentMenu, dayIndex, candidate.dish.proteinTag);
+  };
+
+  const setQueueForDay = (dayIndex: number, queue: WeeklyMenu["dinners"]) => {
+    setSwapQueues((prev) => {
+      const next = { ...prev };
+      if (queue.length === 0) {
+        delete next[dayIndex];
+      } else {
+        next[dayIndex] = queue;
+      }
+      return next;
+    });
+  };
+
   const handleSmartSwap = async (dayIndex: number) => {
     if (!menu) return;
 
     const queue = swapQueues[dayIndex] ?? [];
-    if (queue.length > 0) {
-      const [next, ...rest] = queue;
+    const validQueued = queue.filter((candidate) => isValidSwapCandidate(menu, dayIndex, candidate));
+    if (validQueued.length > 0) {
+      const [next, ...rest] = validQueued;
       applySwapCandidate(dayIndex, next);
-      setSwapQueues(rest.length > 0 ? { [dayIndex]: rest } : {});
+      setQueueForDay(dayIndex, rest);
       return;
     }
 
@@ -374,7 +419,7 @@ export function App() {
 
       const [next, ...rest] = result.candidates;
       applySwapCandidate(dayIndex, next);
-      setSwapQueues(rest.length > 0 ? { [dayIndex]: rest } : {});
+      setQueueForDay(dayIndex, rest);
     } finally {
       setSwappingDayIndex(null);
     }
