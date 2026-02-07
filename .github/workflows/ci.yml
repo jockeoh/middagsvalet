@@ -27,6 +27,9 @@ jobs:
       - name: Install
         run: npm ci
 
+      - name: Workaround npm optional dependency bug (Rollup Linux binary)
+        run: npm i --no-save @rollup/rollup-linux-x64-gnu@4.57.1
+
       - name: Build
         run: npm run build
 

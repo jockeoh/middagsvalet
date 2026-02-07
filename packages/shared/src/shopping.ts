@@ -1,6 +1,26 @@
-import { Dish, ShoppingList } from "./types";
+﻿import { Dish, ShoppingList } from "./types";
+import { canonicalizeIngredientName, displayIngredientName, normalizeUnit, toBaseUnit } from "./ingredient-normalization";
 
 const categories = ["Frukt&Gront", "Mejeri", "Skafferi", "Kott/Fisk", "Kryddor"] as const;
+
+const prettifyAmountAndUnit = (amount: number, unit: string): { amount: number; unit: string } => {
+  if (unit === "ml") {
+    if (amount >= 1000) return { amount: Number((amount / 1000).toFixed(2)), unit: "l" };
+    if (amount >= 100) return { amount: Number((amount / 100).toFixed(2)), unit: "dl" };
+    return { amount: Number(amount.toFixed(0)), unit: "ml" };
+  }
+
+  if (unit === "g") {
+    if (amount >= 1000) return { amount: Number((amount / 1000).toFixed(2)), unit: "kg" };
+    return { amount: Number(amount.toFixed(0)), unit: "g" };
+  }
+
+  if (unit === "tsk" && amount >= 3) {
+    return { amount: Number((amount / 3).toFixed(2)), unit: "msk" };
+  }
+
+  return { amount: Number(amount.toFixed(2)), unit };
+};
 
 export const buildShoppingList = (
   householdId: string,
@@ -11,15 +31,18 @@ export const buildShoppingList = (
 
   for (const dish of dishes) {
     for (const ingredient of dish.ingredients) {
-      const key = `${ingredient.name.toLowerCase()}__${ingredient.unit}`;
+      const canonicalName = canonicalizeIngredientName(ingredient.name);
+      const unit = normalizeUnit(ingredient.unit);
+      const base = toBaseUnit(canonicalName, ingredient.amount, unit);
+      const key = `${canonicalName}__${base.unit}`;
       const current = bucket.get(key);
       if (current) {
-        current.amount += ingredient.amount;
+        current.amount += base.amount;
       } else {
         bucket.set(key, {
-          name: ingredient.name,
-          amount: ingredient.amount,
-          unit: ingredient.unit,
+          name: displayIngredientName(canonicalName),
+          amount: base.amount,
+          unit: base.unit,
           category: ingredient.category,
         });
       }
@@ -35,9 +58,11 @@ export const buildShoppingList = (
   };
 
   for (const item of bucket.values()) {
+    const formatted = prettifyAmountAndUnit(item.amount, item.unit);
     itemsByCategory[item.category].push({
       ...item,
-      amount: Number(item.amount.toFixed(2)),
+      amount: formatted.amount,
+      unit: formatted.unit,
       inPantry: Boolean(pantryState[item.name.toLowerCase()]),
     });
   }

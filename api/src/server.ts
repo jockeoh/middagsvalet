@@ -32,8 +32,11 @@ const parseDish = (row: PersistedDish): Dish => ({
   imageUrl: row.imageUrl ?? undefined,
 });
 
-const getAllDishes = (): Dish[] => {
-  const rows = db.prepare("SELECT * FROM dishes").all() as PersistedDish[];
+const getAllDishes = (mainOnly = true): Dish[] => {
+  const rows = (mainOnly
+    ? db.prepare("SELECT * FROM dishes WHERE mealType = 'main'")
+    : db.prepare("SELECT * FROM dishes")
+  ).all() as PersistedDish[];
   return rows.map(parseDish);
 };
 
@@ -464,7 +467,7 @@ app.put("/api/households/:householdId/config", requireAuth, (req, res) => {
 });
 
 app.get("/api/bootstrap", (_req, res) => {
-  const dishes = getAllDishes();
+  const dishes = getAllDishes(true);
   const stats = {
     totalDishes: dishes.length,
     cuisines: Array.from(new Set(dishes.flatMap((dish) => dish.cuisineTags))).sort(),
@@ -522,7 +525,7 @@ app.post("/api/menu/generate", (req, res) => {
     })
     .parse(req.body);
 
-  const dishMap = new Map(getAllDishes().map((dish) => [dish.id, dish]));
+  const dishMap = new Map(getAllDishes(true).map((dish) => [dish.id, dish]));
   const lockedDays = (payload.lockedDays ?? [])
     .map((day) => {
       const dish = dishMap.get(day.dishId);
@@ -537,7 +540,7 @@ app.post("/api/menu/generate", (req, res) => {
     })
     .filter(Boolean);
 
-  const menu = generateWeeklyMenu(getAllDishes(), payload.household, payload.context, {
+  const menu = generateWeeklyMenu(getAllDishes(true), payload.household, payload.context, {
     lockedDays: lockedDays as any,
   });
 
@@ -565,7 +568,7 @@ app.post("/api/menu/swap", (req, res) => {
     })
     .parse(req.body);
 
-  const dishMap = new Map(getAllDishes().map((dish) => [dish.id, dish]));
+  const dishMap = new Map(getAllDishes(true).map((dish) => [dish.id, dish]));
   const hydratedMenu = {
     ...payload.currentMenu,
     dinners: payload.currentMenu.dinners
@@ -581,7 +584,13 @@ app.post("/api/menu/swap", (req, res) => {
       .filter(Boolean) as any,
   };
 
-  const swapped = swapMenuDish(hydratedMenu as any, payload.dayIndex, getAllDishes(), payload.household, payload.context);
+  const swapped = swapMenuDish(
+    hydratedMenu as any,
+    payload.dayIndex,
+    getAllDishes(true),
+    payload.household,
+    payload.context,
+  );
   res.json(swapped);
 });
 
@@ -594,7 +603,7 @@ app.post("/api/shopping-list", (req, res) => {
     })
     .parse(req.body);
 
-  const all = new Map(getAllDishes().map((dish) => [dish.id, dish]));
+  const all = new Map(getAllDishes(false).map((dish) => [dish.id, dish]));
   const dishes = payload.dishIds.map((id) => all.get(id)).filter(Boolean) as Dish[];
   const shoppingList = buildShoppingList(payload.householdId, dishes, payload.pantryState);
   res.json(shoppingList);

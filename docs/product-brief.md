@@ -19,3 +19,7 @@ Middagsvalet är en beslutsmotor, inte en receptblogg. Fokus ligger på snabb on
 - Separera `household`, `user`, `membership` för delade hushåll
 - Lägg `externalCartAdapter` för ICA/Willys som eget integrationslager
 - Behåll scoring i `packages/shared` för återanvändning mellan API/web/future mobile app
+
+## Kommande implementationer
+- Förbättrad receptklassning: höj precision i `mealType` (main/dessert/other) så färre huvudrätter hamnar i `other`.
+- Modereringsvy för import: visa inkommande recept i kö, låt admin godkänna och justera taggar/mealType innan publicering.
