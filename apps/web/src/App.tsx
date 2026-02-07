@@ -30,6 +30,19 @@ const cuisines = ["italienskt", "asiatiskt", "husman", "mexikanskt", "medelhav",
 const proteins = ["kyckling", "fisk", "nötkött", "vegetariskt", "fläsk"];
 const moodTags = ["comfort", "fresh", "spicy", "budget"];
 const allergens = ["gluten", "laktos", "nötter", "ägg", "soja"];
+const defaultStaplePantryState: Record<string, boolean> = {
+  salt: true,
+  svartpeppar: true,
+  olivolja: true,
+  olja: true,
+  rapsolja: true,
+  smor: true,
+  "smör": true,
+  vetemjol: true,
+  "vetemjöl": true,
+  strosocker: true,
+  "strösocker": true,
+};
 
 const defaultProfiles: Profile[] = [
   { id: "adult-1", name: "Vuxen", type: "adult", pickyLevel: 0, weight: 1 },
@@ -42,7 +55,7 @@ const defaultState: LocalState = {
   token: "",
   user: null,
   profiles: defaultProfiles,
-  pantryState: {},
+  pantryState: { ...defaultStaplePantryState },
   likesByProfile: {},
   dislikesByProfile: {},
   recentDishIds: [],
@@ -52,7 +65,16 @@ const defaultState: LocalState = {
 };
 
 export function App() {
-  const persisted = useMemo(() => loadState() ?? defaultState, []);
+  const persisted = useMemo(() => {
+    const loaded = loadState() ?? defaultState;
+    return {
+      ...loaded,
+      pantryState: {
+        ...defaultStaplePantryState,
+        ...(loaded.pantryState ?? {}),
+      },
+    };
+  }, []);
 
   const [mode, setMode] = useState<Mode>(persisted.token ? "household" : "auth");
   const [authMode, setAuthMode] = useState<AuthMode>("login");
@@ -194,6 +216,18 @@ export function App() {
   const rankPool = useMemo(() => allDishes.filter((dish) => !avoidDishIds.includes(dish.id)).slice(0, 80), [allDishes, avoidDishIds]);
 
   const currentCard = rankPool[rankingIndex];
+
+  const normalizeIngredientKey = (value: string) =>
+    value
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .trim();
+
+  const isStapleIngredient = (name: string) => {
+    const key = normalizeIngredientKey(name);
+    return Boolean(defaultStaplePantryState[key]);
+  };
 
   const toggle = (value: string, list: string[], setter: (next: string[]) => void) => {
     setter(list.includes(value) ? list.filter((item) => item !== value) : [...list, value]);
@@ -858,10 +892,15 @@ export function App() {
           {step === "shopping" && shoppingList && (
             <section className="panel">
               <h2>Inköpslista</h2>
+              <p style={{ marginTop: 0 }}>
+                Standardvaror antas finnas hemma, men du kan lägga till dem vid behov.
+              </p>
               {(Object.keys(shoppingList.itemsByCategory) as Array<keyof ShoppingList["itemsByCategory"]>).map((category) => (
                 <div key={category} className="shopping-block">
                   <h3>{category}</h3>
-                  {shoppingList.itemsByCategory[category].map((item) => (
+                  {shoppingList.itemsByCategory[category]
+                    .filter((item) => !(item.inPantry && isStapleIngredient(item.name)))
+                    .map((item) => (
                     <label key={`${item.name}-${item.unit}`} className="shopping-item">
                       <input type="checkbox" checked={item.inPantry} onChange={() => togglePantry(item.name)} />
                       <span>
@@ -869,6 +908,16 @@ export function App() {
                       </span>
                     </label>
                   ))}
+                  {shoppingList.itemsByCategory[category]
+                    .filter((item) => item.inPantry && isStapleIngredient(item.name))
+                    .map((item) => (
+                      <div key={`${item.name}-${item.unit}-staple`} className="shopping-item">
+                        <span>
+                          {item.name} - {item.amount} {item.unit} (standardvara)
+                        </span>
+                        <button onClick={() => togglePantry(item.name)}>Lägg till</button>
+                      </div>
+                    ))}
                 </div>
               ))}
               <button className="cta" onClick={() => setStep("menu")}>

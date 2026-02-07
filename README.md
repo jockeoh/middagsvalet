@@ -10,6 +10,7 @@ Mobil-first app som hjälper hushåll att välja veckans middagar på cirka 3 mi
   2. Snabbranking: Like/Dislike/Skip i card stack.
   3. Veckomeny: generera och byt rätt direkt.
   4. Inköpslista: summerad, kategoriserad, markera "har hemma".
+- Pantry intelligence (MVP): standardvaror (t.ex. salt/olja) antas finnas hemma som default, döljs i listan men kan alltid läggas till igen med ett klick.
 - Sticky UX: sparar lokalt utan konto, visar favoriter/historik/undvik.
 
 ## Arkitektur
