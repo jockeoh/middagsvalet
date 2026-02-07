@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   approvePendingDish,
+  approvePendingDishWithEdits,
   createHousehold,
   fetchBootstrap,
   fetchHousehold,
@@ -90,6 +91,9 @@ export function App() {
   const [swappingDayIndex, setSwappingDayIndex] = useState<number | null>(null);
   const [shoppingList, setShoppingList] = useState<ShoppingList | null>(null);
   const [pendingReviewDishes, setPendingReviewDishes] = useState<PendingReviewDish[]>([]);
+  const [reviewEdits, setReviewEdits] = useState<
+    Record<string, Record<number, { amount: string; unit: string }>>
+  >({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -447,6 +451,7 @@ export function App() {
     try {
       const pending = await fetchPendingReviewDishes(token);
       setPendingReviewDishes(pending);
+      setReviewEdits({});
       setStep("review");
     } catch (err) {
       setError((err as Error).message);
@@ -463,6 +468,67 @@ export function App() {
       await approvePendingDish(token, dishId);
       const pending = await fetchPendingReviewDishes(token);
       setPendingReviewDishes(pending);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const setReviewIngredientEdit = (
+    dishId: string,
+    ingredientIndex: number,
+    field: "amount" | "unit",
+    value: string,
+  ) => {
+    setReviewEdits((prev) => ({
+      ...prev,
+      [dishId]: {
+        ...(prev[dishId] ?? {}),
+        [ingredientIndex]: {
+          amount: prev[dishId]?.[ingredientIndex]?.amount ?? "",
+          unit: prev[dishId]?.[ingredientIndex]?.unit ?? "",
+          [field]: value,
+        },
+      },
+    }));
+  };
+
+  const handleApprovePendingWithEdits = async (dish: PendingReviewDish) => {
+    if (!token) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const draft = reviewEdits[dish.id] ?? {};
+      const edits: Array<{ index: number; amount: number; unit: string }> = [];
+
+      for (const [rawIndex, edit] of Object.entries(draft)) {
+        const index = Number(rawIndex);
+        const ingredient = dish.ingredients[index];
+        if (!ingredient) continue;
+
+        const amountSource = edit.amount.trim().length > 0 ? edit.amount : String(ingredient.amount);
+        const unit = edit.unit.trim().length > 0 ? edit.unit.trim() : ingredient.unit;
+        const amount = Number(amountSource.replace(",", "."));
+        if (!Number.isFinite(amount) || amount <= 0 || unit.length === 0) {
+          throw new Error(`Ogiltig mängd eller enhet på rad ${index + 1}`);
+        }
+
+        const amountChanged = Math.abs(amount - ingredient.amount) > 0.0001;
+        const unitChanged = unit.toLowerCase() !== ingredient.unit.trim().toLowerCase();
+        if (amountChanged || unitChanged) {
+          edits.push({ index, amount, unit });
+        }
+      }
+
+      await approvePendingDishWithEdits(token, dish.id, edits);
+      const pending = await fetchPendingReviewDishes(token);
+      setPendingReviewDishes(pending);
+      setReviewEdits((prev) => {
+        const next = { ...prev };
+        delete next[dish.id];
+        return next;
+      });
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -824,6 +890,39 @@ export function App() {
                       <p>
                         {dish.proteinTag} | {dish.timeMinutes} min | {dish.ingredients.length} ingredienser
                       </p>
+                      <div style={{ marginTop: "0.5rem", display: "grid", gap: "0.4rem" }}>
+                        {dish.ingredients.map((ingredient, index) => {
+                          const edited = reviewEdits[dish.id]?.[index];
+                          return (
+                            <div
+                              key={`${dish.id}-${ingredient.name}-${index}`}
+                              style={{
+                                display: "grid",
+                                gridTemplateColumns: "1fr 80px 70px",
+                                gap: "0.4rem",
+                                alignItems: "center",
+                              }}
+                            >
+                              <span>{ingredient.name}</span>
+                              <input
+                                inputMode="decimal"
+                                value={edited?.amount ?? String(ingredient.amount)}
+                                onChange={(e) =>
+                                  setReviewIngredientEdit(dish.id, index, "amount", e.target.value)
+                                }
+                                aria-label={`Mängd för ${ingredient.name}`}
+                              />
+                              <input
+                                value={edited?.unit ?? ingredient.unit}
+                                onChange={(e) =>
+                                  setReviewIngredientEdit(dish.id, index, "unit", e.target.value)
+                                }
+                                aria-label={`Enhet för ${ingredient.name}`}
+                              />
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                     <div className="menu-actions">
                       {dish.sourceUrl ? (
@@ -835,6 +934,9 @@ export function App() {
                       )}
                       <button onClick={() => void handleApprovePending(dish.id)} disabled={loading}>
                         Godkänn
+                      </button>
+                      <button onClick={() => void handleApprovePendingWithEdits(dish)} disabled={loading}>
+                        Godkänn med ändring
                       </button>
                     </div>
                   </article>

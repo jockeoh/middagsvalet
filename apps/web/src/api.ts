@@ -235,3 +235,15 @@ export const approvePendingDish = async (token: string, dishId: string): Promise
   });
   await parseJson<{ ok: boolean }>(response);
 };
+
+export const approvePendingDishWithEdits = async (
+  token: string,
+  dishId: string,
+  edits: Array<{ index: number; amount: number; unit: string }>,
+): Promise<void> => {
+  const response = await authedFetch(token, `/review/${dishId}/approve-with-edits`, {
+    method: "POST",
+    body: JSON.stringify({ edits }),
+  });
+  await parseJson<{ ok: boolean }>(response);
+};
