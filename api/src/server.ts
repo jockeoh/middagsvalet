@@ -1,6 +1,6 @@
 ﻿import cors from "cors";
 import express, { NextFunction, Request, Response } from "express";
-import { buildShoppingList, Dish, generateWeeklyMenu, swapMenuDish } from "@middagsvalet/shared";
+import { buildShoppingList, Dish, generateWeeklyMenu, getSwapCandidates, swapMenuDish } from "@middagsvalet/shared";
 import { z } from "zod";
 import { db, PersistedDish } from "./db";
 import { hashPassword, randomId, randomToken, verifyPassword } from "./auth";
@@ -20,6 +20,7 @@ type AuthedRequest = Request & { authUser: AuthUser };
 const parseDish = (row: PersistedDish): Dish => ({
   id: row.id,
   title: row.title,
+  sourceUrl: row.sourceUrl ?? undefined,
   cuisineTags: JSON.parse(row.cuisineTags),
   proteinTag: row.proteinTag,
   timeMinutes: row.timeMinutes,
@@ -592,6 +593,56 @@ app.post("/api/menu/swap", (req, res) => {
     payload.context,
   );
   res.json(swapped);
+});
+
+app.post("/api/menu/swap-options", (req, res) => {
+  const payload = z
+    .object({
+      currentMenu: z.object({
+        householdId: z.string(),
+        createdAt: z.string(),
+        dinners: z.array(
+          z.object({
+            dayIndex: z.number(),
+            dishId: z.string(),
+            score: z.number(),
+            locked: z.boolean().optional(),
+          }),
+        ),
+      }),
+      dayIndex: z.number(),
+      household: householdSchema,
+      context: contextSchema,
+      limit: z.number().int().min(1).max(10).optional(),
+    })
+    .parse(req.body);
+
+  const dishMap = new Map(getAllDishes(true).map((dish) => [dish.id, dish]));
+  const hydratedMenu = {
+    ...payload.currentMenu,
+    dinners: payload.currentMenu.dinners
+      .map((day) => {
+        const dish = dishMap.get(day.dishId);
+        if (!dish) return null;
+        return {
+          ...day,
+          dish,
+          profileScores: [],
+        };
+      })
+      .filter(Boolean) as any,
+  };
+
+  const candidates = getSwapCandidates(
+    hydratedMenu as any,
+    payload.dayIndex,
+    getAllDishes(true),
+    payload.household,
+    payload.context,
+    { limit: payload.limit ?? 5 },
+  );
+
+  res.json({ candidates });
 });
 
 app.post("/api/shopping-list", (req, res) => {

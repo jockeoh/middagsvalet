@@ -182,6 +182,32 @@ export const swapMenuDay = async (payload: {
   return parseJson<WeeklyMenu>(response);
 };
 
+export const fetchSwapOptions = async (payload: {
+  currentMenu: WeeklyMenu;
+  dayIndex: number;
+  household: Household;
+  context: ScoreContext;
+  limit?: number;
+}): Promise<{ candidates: WeeklyMenu["dinners"] }> => {
+  const response = await fetch(`${API_BASE}/menu/swap-options`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      ...payload,
+      currentMenu: {
+        ...payload.currentMenu,
+        dinners: payload.currentMenu.dinners.map((day) => ({
+          dayIndex: day.dayIndex,
+          dishId: day.dish.id,
+          score: day.score,
+          locked: day.locked,
+        })),
+      },
+    }),
+  });
+  return parseJson<{ candidates: WeeklyMenu["dinners"] }>(response);
+};
+
 export const fetchShoppingList = async (payload: {
   householdId: string;
   dishIds: string[];

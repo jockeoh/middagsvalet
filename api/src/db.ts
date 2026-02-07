@@ -8,6 +8,7 @@ export const db = new Database(dbPath);
 export interface PersistedDish {
   id: string;
   title: string;
+  sourceUrl: string | null;
   cuisineTags: string;
   mealType?: string;
   proteinTag: string;

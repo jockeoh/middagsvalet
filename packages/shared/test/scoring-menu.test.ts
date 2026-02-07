@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { generateWeeklyMenu } from "../src/menu";
+import { generateWeeklyMenu, getSwapCandidates } from "../src/menu";
 import { Dish, Household, ScoreContext } from "../src/types";
 import { scoreDishForHousehold } from "../src/scoring";
 
@@ -117,6 +117,32 @@ describe("menu generation", () => {
       const p1 = menu.dinners[i - 1].dish.proteinTag;
       const p2 = menu.dinners[i].dish.proteinTag;
       expect(!(p0 === p1 && p1 === p2)).toBe(true);
+    }
+  });
+});
+
+describe("smart swap", () => {
+  it("returns safe alternatives without creating 3 proteins in a row", () => {
+    const currentMenu = {
+      householdId: household.id,
+      createdAt: new Date().toISOString(),
+      dinners: [
+        { dayIndex: 0, dish: dishes[0], score: 70, profileScores: [] },
+        { dayIndex: 1, dish: dishes[3], score: 62, profileScores: [] },
+        { dayIndex: 2, dish: dishes[2], score: 74, profileScores: [] },
+      ],
+    };
+
+    const alternatives = getSwapCandidates(currentMenu, 2, dishes, household, context, { limit: 5 });
+
+    expect(alternatives.length).toBeGreaterThan(0);
+    expect(alternatives.some((day) => day.dish.allergens.includes("nÃ¶tter"))).toBe(false);
+
+    for (const option of alternatives) {
+      const protein0 = currentMenu.dinners[0].dish.proteinTag;
+      const protein1 = currentMenu.dinners[1].dish.proteinTag;
+      const protein2 = option.dish.proteinTag;
+      expect(!(protein0 === protein1 && protein1 === protein2)).toBe(true);
     }
   });
 });

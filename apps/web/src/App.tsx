@@ -6,13 +6,13 @@ import {
   fetchHousehold,
   fetchMe,
   fetchShoppingList,
+  fetchSwapOptions,
   generateMenu,
   joinHousehold,
   listHouseholds,
   loginUser,
   registerUser,
   saveRating,
-  swapMenuDay,
   updateHouseholdConfig,
   HouseholdListItem,
 } from "./api";
@@ -83,6 +83,8 @@ export function App() {
   const [avoidDishIds, setAvoidDishIds] = useState<string[]>(persisted.avoidDishIds);
   const [pantryState, setPantryState] = useState<Record<string, boolean>>(persisted.pantryState);
   const [menu, setMenu] = useState<WeeklyMenu | null>(null);
+  const [swapQueues, setSwapQueues] = useState<Record<number, WeeklyMenu["dinners"]>>({});
+  const [swappingDayIndex, setSwappingDayIndex] = useState<number | null>(null);
   const [shoppingList, setShoppingList] = useState<ShoppingList | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -326,6 +328,7 @@ export function App() {
     try {
       const nextMenu = await generateMenu({ household, context });
       setMenu(nextMenu);
+      setSwapQueues({});
       setStep("menu");
     } catch (err) {
       setError((err as Error).message);
@@ -334,28 +337,92 @@ export function App() {
     }
   };
 
-  const handleSwap = async (dayIndex: number) => {
+  const applySwapCandidate = (dayIndex: number, candidate: WeeklyMenu["dinners"][number]) => {
+    setMenu((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        createdAt: new Date().toISOString(),
+        dinners: current.dinners.map((day) =>
+          day.dayIndex === dayIndex ? { ...candidate, dayIndex, locked: false } : day,
+        ),
+      };
+    });
+  };
+
+  const wouldCreateTripleProtein = (
+    currentMenu: WeeklyMenu,
+    dayIndex: number,
+    candidateProtein: string,
+  ): boolean => {
+    const proteinsByDay = new Map<number, string>();
+    for (const day of currentMenu.dinners) {
+      proteinsByDay.set(day.dayIndex, day.dayIndex === dayIndex ? candidateProtein : day.dish.proteinTag);
+    }
+
+    const maxDay = Math.max(...Array.from(proteinsByDay.keys()));
+    for (let i = 0; i <= maxDay - 2; i += 1) {
+      const a = proteinsByDay.get(i);
+      const b = proteinsByDay.get(i + 1);
+      const c = proteinsByDay.get(i + 2);
+      if (a && b && c && a === b && b === c) return true;
+    }
+    return false;
+  };
+
+  const isValidSwapCandidate = (
+    currentMenu: WeeklyMenu,
+    dayIndex: number,
+    candidate: WeeklyMenu["dinners"][number],
+  ): boolean => {
+    const duplicate = currentMenu.dinners.some(
+      (day) => day.dayIndex !== dayIndex && day.dish.id === candidate.dish.id,
+    );
+    if (duplicate) return false;
+    return !wouldCreateTripleProtein(currentMenu, dayIndex, candidate.dish.proteinTag);
+  };
+
+  const setQueueForDay = (dayIndex: number, queue: WeeklyMenu["dinners"]) => {
+    setSwapQueues((prev) => {
+      const next = { ...prev };
+      if (queue.length === 0) {
+        delete next[dayIndex];
+      } else {
+        next[dayIndex] = queue;
+      }
+      return next;
+    });
+  };
+
+  const handleSmartSwap = async (dayIndex: number) => {
     if (!menu) return;
-    setLoading(true);
+
+    const queue = swapQueues[dayIndex] ?? [];
+    const validQueued = queue.filter((candidate) => isValidSwapCandidate(menu, dayIndex, candidate));
+    if (validQueued.length > 0) {
+      const [next, ...rest] = validQueued;
+      applySwapCandidate(dayIndex, next);
+      setQueueForDay(dayIndex, rest);
+      return;
+    }
+
+    setSwappingDayIndex(dayIndex);
     try {
-      const next = await swapMenuDay({
+      const result = await fetchSwapOptions({
         currentMenu: menu,
         dayIndex,
         household,
         context,
+        limit: 5,
       });
-      setMenu(next);
-    } finally {
-      setLoading(false);
-    }
-  };
+      if (result.candidates.length === 0) return;
 
-  const toggleLock = (dayIndex: number) => {
-    if (!menu) return;
-    setMenu({
-      ...menu,
-      dinners: menu.dinners.map((day) => (day.dayIndex === dayIndex ? { ...day, locked: !day.locked } : day)),
-    });
+      const [next, ...rest] = result.candidates;
+      applySwapCandidate(dayIndex, next);
+      setQueueForDay(dayIndex, rest);
+    } finally {
+      setSwappingDayIndex(null);
+    }
   };
 
   const handleBuildShoppingList = async () => {
@@ -662,8 +729,17 @@ export function App() {
                     </p>
                   </div>
                   <div className="menu-actions">
-                    <button onClick={() => toggleLock(day.dayIndex)}>{day.locked ? "Lås upp" : "Lås"}</button>
-                    <button onClick={() => void handleSwap(day.dayIndex)} disabled={loading}>
+                    {day.dish.sourceUrl ? (
+                      <a className="menu-link" href={day.dish.sourceUrl} target="_blank" rel="noreferrer">
+                        Recept
+                      </a>
+                    ) : (
+                      <button disabled>Recept saknas</button>
+                    )}
+                    <button
+                      onClick={() => void handleSmartSwap(day.dayIndex)}
+                      disabled={loading || swappingDayIndex === day.dayIndex}
+                    >
                       Byt rätt
                     </button>
                   </div>

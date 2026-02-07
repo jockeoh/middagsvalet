@@ -45,6 +45,7 @@ export interface Ingredient {
 export interface Dish {
   id: string;
   title: string;
+  sourceUrl?: string;
   cuisineTags: string[];
   proteinTag: string;
   timeMinutes: number;

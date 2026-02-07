@@ -7,6 +7,10 @@ interface MenuOptions {
   randomFn?: () => number;
 }
 
+interface SwapCandidateOptions {
+  limit?: number;
+}
+
 const violatesProteinRule = (selected: Dish[], candidate: Dish): boolean => {
   if (selected.length < 2) return false;
   const a = selected[selected.length - 1];
@@ -101,4 +105,69 @@ export const swapMenuDish = (
     dinners: updated,
     createdAt: new Date().toISOString(),
   };
+};
+
+const violatesProteinRuleAtDay = (dinners: MenuDay[], dayIndex: number, candidate: Dish): boolean => {
+  const proteinsByDay = new Map<number, string>();
+  for (const day of dinners) {
+    proteinsByDay.set(day.dayIndex, day.dish.proteinTag);
+  }
+  proteinsByDay.set(dayIndex, candidate.proteinTag);
+
+  const maxDay = Math.max(...Array.from(proteinsByDay.keys()));
+  for (let i = 0; i <= maxDay - 2; i += 1) {
+    const a = proteinsByDay.get(i);
+    const b = proteinsByDay.get(i + 1);
+    const c = proteinsByDay.get(i + 2);
+    if (a && b && c && a === b && b === c) return true;
+  }
+  return false;
+};
+
+const scoreSwapCandidate = (candidate: ReturnType<typeof rankDishes>[number], targetDish: Dish): number => {
+  let score = candidate.totalScore;
+  if (candidate.dish.proteinTag === targetDish.proteinTag) score += 8;
+  if (candidate.dish.cuisineTags.some((tag) => targetDish.cuisineTags.includes(tag))) score += 6;
+  score -= Math.abs(candidate.dish.timeMinutes - targetDish.timeMinutes) * 0.35;
+  return score;
+};
+
+export const getSwapCandidates = (
+  currentMenu: WeeklyMenu,
+  dayIndex: number,
+  dishes: Dish[],
+  household: Household,
+  context: ScoreContext,
+  options: SwapCandidateOptions = {},
+): MenuDay[] => {
+  const targetDay = currentMenu.dinners.find((day) => day.dayIndex === dayIndex);
+  if (!targetDay) return [];
+
+  const limit = Math.max(1, options.limit ?? 5);
+  const blockedDishIds = new Set(
+    currentMenu.dinners.filter((day) => day.dayIndex !== dayIndex).map((day) => day.dish.id),
+  );
+
+  const ranked = rankDishes(dishes, household, context)
+    .filter((candidate) => {
+      if (candidate.dish.id === targetDay.dish.id) return false;
+      if (blockedDishIds.has(candidate.dish.id)) return false;
+      if (candidate.dish.allergens.some((allergen) => household.preferences.avoidAllergens.includes(allergen))) return false;
+      if (violatesProteinRuleAtDay(currentMenu.dinners, dayIndex, candidate.dish)) return false;
+      return true;
+    })
+    .map((candidate) => ({
+      candidate,
+      swapScore: scoreSwapCandidate(candidate, targetDay.dish),
+    }))
+    .sort((a, b) => b.swapScore - a.swapScore)
+    .slice(0, limit);
+
+  return ranked.map(({ candidate }) => ({
+    dayIndex,
+    dish: candidate.dish,
+    score: candidate.totalScore,
+    profileScores: candidate.profileScores,
+    locked: false,
+  }));
 };
