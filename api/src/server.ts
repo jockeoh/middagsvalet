@@ -20,6 +20,7 @@ type AuthedRequest = Request & { authUser: AuthUser };
 const parseDish = (row: PersistedDish): Dish => ({
   id: row.id,
   title: row.title,
+  sourceUrl: row.sourceUrl ?? undefined,
   cuisineTags: JSON.parse(row.cuisineTags),
   proteinTag: row.proteinTag,
   timeMinutes: row.timeMinutes,

@@ -380,15 +380,6 @@ export function App() {
     }
   };
 
-  const toggleLock = (dayIndex: number) => {
-    if (!menu) return;
-    setMenu({
-      ...menu,
-      dinners: menu.dinners.map((day) => (day.dayIndex === dayIndex ? { ...day, locked: !day.locked } : day)),
-    });
-    setSwapQueues((prev) => ({ ...prev, [dayIndex]: [] }));
-  };
-
   const handleBuildShoppingList = async () => {
     if (!menu) return;
     const list = (await fetchShoppingList({
@@ -693,10 +684,16 @@ export function App() {
                     </p>
                   </div>
                   <div className="menu-actions">
-                    <button onClick={() => toggleLock(day.dayIndex)}>{day.locked ? "Lås upp" : "Lås"}</button>
+                    {day.dish.sourceUrl ? (
+                      <a className="menu-link" href={day.dish.sourceUrl} target="_blank" rel="noreferrer">
+                        Recept
+                      </a>
+                    ) : (
+                      <button disabled>Recept saknas</button>
+                    )}
                     <button
                       onClick={() => void handleSmartSwap(day.dayIndex)}
-                      disabled={loading || day.locked || swappingDayIndex === day.dayIndex}
+                      disabled={loading || swappingDayIndex === day.dayIndex}
                     >
                       Byt rätt
                     </button>

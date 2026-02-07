@@ -179,6 +179,7 @@ const toDish = (sample: KoketSample, index: number): { dish: Dish; mealType: "ma
     dish: {
       id: `koket-${index + 1}`,
       title: sample.title,
+      sourceUrl: sample.sourceUrl,
       cuisineTags: sample.raw?.recipeCuisine ? [String(sample.raw.recipeCuisine).toLowerCase()] : [],
       proteinTag: detectProtein(sample),
       timeMinutes: Math.max(10, Math.min(timeMinutes, 120)),
@@ -205,10 +206,10 @@ const run = () => {
 
   const insert = db.prepare(`
     INSERT INTO dishes (
-      id, title, cuisineTags, mealType, proteinTag, timeMinutes, difficulty, kidFriendlyScore,
+      id, title, sourceUrl, cuisineTags, mealType, proteinTag, timeMinutes, difficulty, kidFriendlyScore,
       ingredients, instructionsShort, allergens, tags, imageUrl, createdAt
     ) VALUES (
-      @id, @title, @cuisineTags, @mealType, @proteinTag, @timeMinutes, @difficulty, @kidFriendlyScore,
+      @id, @title, @sourceUrl, @cuisineTags, @mealType, @proteinTag, @timeMinutes, @difficulty, @kidFriendlyScore,
       @ingredients, @instructionsShort, @allergens, @tags, @imageUrl, @createdAt
     )
   `);

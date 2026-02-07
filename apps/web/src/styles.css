@@ -218,6 +218,17 @@ button:hover {
   min-width: 7.5rem;
 }
 
+.menu-link {
+  min-width: 7.5rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: white;
+  padding: 0.5rem 0.8rem;
+  text-decoration: none;
+  color: inherit;
+  text-align: center;
+}
+
 .shopping-block {
   border-top: 1px solid #8da9c4;
   margin-top: 0.7rem;

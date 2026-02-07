@@ -63,6 +63,7 @@ const buildDish = (index: number): Dish => {
   return {
     id: `dish-${index + 1}`,
     title: name,
+    sourceUrl: undefined,
     cuisineTags: [cuisineA, cuisineB],
     proteinTag: protein,
     timeMinutes,
@@ -83,10 +84,10 @@ removeAll.run();
 
 const insert = db.prepare(`
   INSERT INTO dishes (
-    id, title, cuisineTags, mealType, proteinTag, timeMinutes, difficulty, kidFriendlyScore,
+    id, title, sourceUrl, cuisineTags, mealType, proteinTag, timeMinutes, difficulty, kidFriendlyScore,
     ingredients, instructionsShort, allergens, tags, imageUrl, createdAt
   ) VALUES (
-    @id, @title, @cuisineTags, @mealType, @proteinTag, @timeMinutes, @difficulty, @kidFriendlyScore,
+    @id, @title, @sourceUrl, @cuisineTags, @mealType, @proteinTag, @timeMinutes, @difficulty, @kidFriendlyScore,
     @ingredients, @instructionsShort, @allergens, @tags, @imageUrl, @createdAt
   )
 `);
